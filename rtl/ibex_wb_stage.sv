@@ -15,9 +15,11 @@
 `include "dv_fcov_macros.svh"
 
 module ibex_wb_stage #(
-  parameter bit ResetAll          = 1'b0,
-  parameter bit WritebackStage    = 1'b0,
-  parameter bit DummyInstructions = 1'b0
+  parameter bit          ResetAll          = 1'b0,
+  parameter bit          WritebackStage    = 1'b0,
+  parameter bit          DummyInstructions = 1'b0,
+  // Vector width plumbed through for future V writeback datapath
+  parameter int unsigned VLEN              = 128
 ) (
   input  logic                     clk_i,
   input  logic                     rst_ni,
@@ -38,6 +40,7 @@ module ibex_wb_stage #(
   output logic                     perf_instr_ret_wb_spec_o,
   output logic                     perf_instr_ret_compressed_wb_spec_o,
 
+  // input being directly bypassed to output if no writeback stage. to see the output signals see line 53
   input  logic [4:0]               rf_waddr_id_i,
   input  logic [31:0]              rf_wdata_id_i,
   input  logic                     rf_we_id_i,
@@ -52,6 +55,9 @@ module ibex_wb_stage #(
   output logic [4:0]               rf_waddr_wb_o,
   output logic [31:0]              rf_wdata_wb_o,
   output logic                     rf_we_wb_o,
+
+  // added to support v-extension (no data yet; tied off to 0)
+  output logic [VLEN-1:0]          rf_wdata_wb_v_o,
 
   output logic                     dummy_instr_wb_o,
 
@@ -245,6 +251,11 @@ module ibex_wb_stage #(
   assign rf_wdata_wb_o = ({32{rf_wdata_wb_mux_we[0]}} & rf_wdata_wb_mux[0]) |
                          ({32{rf_wdata_wb_mux_we[1]}} & rf_wdata_wb_mux[1]);
   assign rf_we_wb_o    = |rf_wdata_wb_mux_we;
+
+  // Vector writeback path: no producer yet. Keep internal signal at 0 and drive output.
+  logic [VLEN-1:0] rf_wdata_wb_v_int;
+  assign rf_wdata_wb_v_int = '0;
+  assign rf_wdata_wb_v_o   = rf_wdata_wb_v_int;
 
   `DV_FCOV_SIGNAL_GEN_IF(logic, wb_valid, g_writeback_stage.wb_valid_q, WritebackStage)
 

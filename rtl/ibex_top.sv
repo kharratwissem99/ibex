@@ -341,7 +341,9 @@ module ibex_top import ibex_pkg::*; #(
     .DmHaltAddr       (DmHaltAddr),
     .DmExceptionAddr  (DmExceptionAddr),
     .CsrMvendorId     (CsrMvendorId),
-    .CsrMimpId        (CsrMimpId)
+    .CsrMimpId        (CsrMimpId),
+    .V_Enabled       (V_Enabled),
+    .VLEN            (VLEN)
   ) u_ibex_core (
     .clk_i(clk),
     .rst_ni,
@@ -375,6 +377,11 @@ module ibex_top import ibex_pkg::*; #(
     .rf_wdata_wb_ecc_o(rf_wdata_wb_ecc),
     .rf_rdata_a_ecc_i (rf_rdata_a_ecc_buf),
     .rf_rdata_b_ecc_i (rf_rdata_b_ecc_buf),
+
+    // Added for V-extension support
+    .rf_wdata_wb_v_o  (rf_wdata_wb_v),
+    .rf_rdata_a_v_i   (rf_rdata_a_v),
+    .rf_rdata_b_v_i   (rf_rdata_b_v),
 
     .ic_tag_req_o      (ic_tag_req),
     .ic_tag_write_o    (ic_tag_write),
