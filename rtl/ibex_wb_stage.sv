@@ -56,8 +56,10 @@ module ibex_wb_stage #(
   output logic [31:0]              rf_wdata_wb_o,
   output logic                     rf_we_wb_o,
 
-  // added to support v-extension (no data yet; tied off to 0)
-  output logic [VLEN-1:0]          rf_wdata_wb_v_o,
+  // added to support V-Extension (no data yet; tied off to 0)
+  input  logic [VLEN-1:0]          rf_wdata_id_i_v,  // this is the data from ID to be written back to vector RF
+  input  logic [VLEN-1:0]          rf_wdata_lsu_i_v, // this is the data from LSU to be written back to vector RF
+  output logic [VLEN-1:0]          rf_wdata_wb_v_o,  // this is the multiplexer output data to be written back to vector RF
 
   output logic                     dummy_instr_wb_o,
 
@@ -74,6 +76,10 @@ module ibex_wb_stage #(
   logic [31:0] rf_wdata_wb_mux    [2];
   logic [1:0]  rf_wdata_wb_mux_we;
 
+  logic [VLEN-1:0] rf_wdata_wb_mux_v    [2];
+
+  // TODO: should the vector extension use the write back stage or bypass it?
+  // For now, bypassing it as the vector extension is not fully integrated yet.
   if (WritebackStage) begin : g_writeback_stage
     logic [31:0]    rf_wdata_wb_q;
     logic           rf_we_wb_q;
@@ -204,6 +210,8 @@ module ibex_wb_stage #(
     // without writeback stage just pass through register write signals
     assign rf_waddr_wb_o         = rf_waddr_id_i;
     assign rf_wdata_wb_mux[0]    = rf_wdata_id_i;
+    // for v-extension: data from ID to vector RF writeback path
+    assign rf_wdata_wb_mux_v[0]  = rf_wdata_id_i_v;
     assign rf_wdata_wb_mux_we[0] = rf_we_id_i;
     assign rf_wdata_wb_mux_we[1] = rf_we_lsu_i;
 
@@ -245,6 +253,7 @@ module ibex_wb_stage #(
   end
 
   assign rf_wdata_wb_mux[1] = rf_wdata_lsu_i;
+  assign rf_wdata_wb_mux_v[1] = rf_wdata_lsu_i_v; // TODO: maybe enable only for v-extension
 
   // RF write data can come from ID results (all RF writes that aren't because of loads will come
   // from here) or the LSU (RF writes for load data)
@@ -252,10 +261,15 @@ module ibex_wb_stage #(
                          ({32{rf_wdata_wb_mux_we[1]}} & rf_wdata_wb_mux[1]);
   assign rf_we_wb_o    = |rf_wdata_wb_mux_we;
 
+  // for v-extension: the data that needs to be written back to the vector register file comes from the LSU or ID
+  // TODO: until now we are using the same write enable signal as for the scalar RF. This might need to be changed in the future, because it can lead to some problems.
+  assign rf_wdata_wb_v_o = ({VLEN{rf_wdata_wb_mux_we[0]}} & rf_wdata_wb_mux_v[0]) |
+                         ({VLEN{rf_wdata_wb_mux_we[1]}} & rf_wdata_wb_mux_v[1]);
+
   // Vector writeback path: no producer yet. Keep internal signal at 0 and drive output.
-  logic [VLEN-1:0] rf_wdata_wb_v_int;
-  assign rf_wdata_wb_v_int = '0;
-  assign rf_wdata_wb_v_o   = rf_wdata_wb_v_int;
+  //logic [VLEN-1:0] rf_wdata_wb_v_int;
+  //assign rf_wdata_wb_v_int = '0;
+  //assign rf_wdata_wb_v_o   = rf_wdata_wb_v_int;
 
   `DV_FCOV_SIGNAL_GEN_IF(logic, wb_valid, g_writeback_stage.wb_valid_q, WritebackStage)
 
