@@ -60,6 +60,9 @@ module ibex_wb_stage #(
   input  logic [VLEN-1:0]          rf_wdata_id_i_v,  // this is the data from ID to be written back to vector RF
   input  logic [VLEN-1:0]          rf_wdata_lsu_i_v, // this is the data from LSU to be written back to vector RF
   output logic [VLEN-1:0]          rf_wdata_wb_v_o,  // this is the multiplexer output data to be written back to vector RF
+  input  logic                     rf_we_lsu_i_v, // write-enable for vector RF from LSU
+  input  logic                     rf_we_id_i_v, // write-enable for vector RF from ID
+  output logic                     rf_we_wb_v_o,     // separate write-enable for vector RF
 
   output logic                     dummy_instr_wb_o,
 
@@ -212,6 +215,9 @@ module ibex_wb_stage #(
     assign rf_wdata_wb_mux[0]    = rf_wdata_id_i;
     // for v-extension: data from ID to vector RF writeback path
     assign rf_wdata_wb_mux_v[0]  = rf_wdata_id_i_v;
+    assign rf_wdata_wb_mux_we_v[0] = rf_we_id_i_v;
+    assign rf_wdata_wb_mux_we_v[1] = rf_we_lsu_i_v;
+
     assign rf_wdata_wb_mux_we[0] = rf_we_id_i;
     assign rf_wdata_wb_mux_we[1] = rf_we_lsu_i;
 
@@ -265,6 +271,7 @@ module ibex_wb_stage #(
   // TODO: until now we are using the same write enable signal as for the scalar RF. This might need to be changed in the future, because it can lead to some problems.
   assign rf_wdata_wb_v_o = ({VLEN{rf_wdata_wb_mux_we[0]}} & rf_wdata_wb_mux_v[0]) |
                          ({VLEN{rf_wdata_wb_mux_we[1]}} & rf_wdata_wb_mux_v[1]);
+  assign rf_we_wb_v_o  = |rf_wdata_wb_mux_we_v;
 
   // Vector writeback path: no producer yet. Keep internal signal at 0 and drive output.
   //logic [VLEN-1:0] rf_wdata_wb_v_int;

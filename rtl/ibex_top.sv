@@ -198,6 +198,7 @@ module ibex_top import ibex_pkg::*; #(
   logic [VLEN-1:0] rf_wdata_wb_v;
   logic [VLEN-1:0] rf_rdata_a_v;
   logic [VLEN-1:0] rf_rdata_b_v;
+  logic            rf_we_wb_v;
   logic            rf_v_alert_major_internal;
 
   // Combined data and integrity for data and instruction busses
@@ -380,6 +381,7 @@ module ibex_top import ibex_pkg::*; #(
 
     // Added for V-extension support
     .rf_wdata_wb_v_o  (rf_wdata_wb_v),
+    .rf_we_wb_v_o     (rf_we_wb_v),
     .rf_rdata_a_v_i   (rf_rdata_a_v),
     .rf_rdata_b_v_i   (rf_rdata_b_v),
 
@@ -558,7 +560,7 @@ module ibex_top import ibex_pkg::*; #(
       .rdata_b_o       (rf_rdata_b_v),
       .waddr_a_i       (rf_waddr_wb),
       .wdata_a_i       (rf_wdata_wb_v),
-      .we_a_i          (rf_we_wb),
+      .we_a_i          (rf_we_wb_v),
       .err_o           (rf_v_alert_major_internal)
     );
   end else begin : gen_no_vector_rf
@@ -566,6 +568,7 @@ module ibex_top import ibex_pkg::*; #(
     assign rf_rdata_a_v = '0;
     assign rf_rdata_b_v = '0;
     assign rf_wdata_wb_v = '0;
+    assign rf_we_wb_v    = 1'b0;
     assign rf_v_alert_major_internal = 1'b0;
   end
 

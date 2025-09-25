@@ -97,6 +97,7 @@ module ibex_core import ibex_pkg::*; #(
 
   // Added for V-extension support
   output logic [VLEN-1:0]  rf_wdata_wb_v_o,
+  output logic             rf_we_wb_v_o,
   input  logic [VLEN-1:0]  rf_rdata_a_v_i,
   input  logic [VLEN-1:0]  rf_rdata_b_v_i,
 
@@ -273,6 +274,7 @@ module ibex_core import ibex_pkg::*; #(
 
   // Added for V-extension support: Internal signals
   logic [VLEN-1:0] rf_wdata_wb_v;
+  logic            rf_we_wb_v;
   logic [VLEN-1:0] rf_rdata_a_v;
   logic [VLEN-1:0] rf_rdata_b_v;
 
@@ -858,11 +860,13 @@ module ibex_core import ibex_pkg::*; #(
     .rf_waddr_id_i(rf_waddr_id),
     .rf_wdata_id_i(rf_wdata_id),
     .rf_we_id_i   (rf_we_id),
+    .rf_wdata_id_i_v('0), // TODO: connect to V-extension
 
     .dummy_instr_id_i(dummy_instr_id),
 
     .rf_wdata_lsu_i(rf_wdata_lsu),
     .rf_we_lsu_i   (rf_we_lsu),
+    .rf_wdata_lsu_i_v('0), // TODO: connect to V-extension
 
     .rf_wdata_fwd_wb_o(rf_wdata_fwd_wb),
 
@@ -872,6 +876,7 @@ module ibex_core import ibex_pkg::*; #(
 
     // added to support v-extension
     .rf_wdata_wb_v_o(rf_wdata_wb_v),
+    .rf_we_wb_v_o   (rf_we_wb_v),
 
     .dummy_instr_wb_o(dummy_instr_wb),
 
@@ -919,9 +924,11 @@ module ibex_core import ibex_pkg::*; #(
   assign rf_rdata_b_v = rf_rdata_b_v_i;
   if (V_Enabled) begin : gen_v_ext
     assign rf_wdata_wb_v_o = rf_wdata_wb_v;
+    assign rf_we_wb_v_o    = rf_we_wb_v;
   end
   else begin : gen_no_v_ext
     assign rf_wdata_wb_v_o = '0;
+    assign rf_we_wb_v_o    = 1'b0;
   end
 
   if (RegFileECC) begin : gen_regfile_ecc
