@@ -59,10 +59,13 @@ module ibex_wb_stage #(
   // added to support V-Extension (no data yet; tied off to 0)
   input  logic [VLEN-1:0]          rf_wdata_id_i_v,  // this is the data from ID to be written back to vector RF
   input  logic [VLEN-1:0]          rf_wdata_lsu_i_v, // this is the data from LSU to be written back to vector RF
-  output logic [VLEN-1:0]          rf_wdata_wb_v_o,  // this is the multiplexer output data to be written back to vector RF
+
   input  logic                     rf_we_lsu_i_v, // write-enable for vector RF from LSU
   input  logic                     rf_we_id_i_v, // write-enable for vector RF from ID
+
+  output logic [VLEN-1:0]          rf_wdata_wb_v_o,  // this is the multiplexer output data to be written back to vector RF
   output logic                     rf_we_wb_v_o,     // separate write-enable for vector RF
+  // end added to support V-Extension
 
   output logic                     dummy_instr_wb_o,
 
