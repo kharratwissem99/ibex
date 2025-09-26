@@ -803,10 +803,10 @@ module ibex_core import ibex_pkg::*; #(
     .data_rdata_i     (data_rdata_i),
 
     // signals to/from ID/EX stage
-    .lsu_we_i      (lsu_we),
-    .lsu_type_i    (lsu_type),
-    .lsu_wdata_i   (lsu_wdata),
-    .lsu_sign_ext_i(lsu_sign_ext),
+    .lsu_we_i      (lsu_we), // from ID stage
+    .lsu_type_i    (lsu_type), // from ID stage
+    .lsu_wdata_i   (lsu_wdata), // from ID stage
+    .lsu_sign_ext_i(lsu_sign_ext), // from ID stage
 
     .lsu_rdata_o      (rf_wdata_lsu),
     .lsu_rdata_valid_o(lsu_rdata_valid),
