@@ -1,0 +1,47 @@
+module ibex_vector_unit #(
+  parameter int VLEN_BITS   = 128,
+  parameter int VLEN_BYTES  = VLEN_BITS/8, // = 16
+  parameter bit SUPPORT_SEW8  = 1,
+  parameter bit SUPPORT_SEW16 = 1
+)(
+  input  logic               clk_i,
+  input  logic               rst_ni,
+
+  // Core ↔ VU command/response (blocking, one-inflight)
+  input  logic               v_req_valid_i,
+  output logic               v_req_ready_o,
+  input  ibex_pkg::v_req_t  v_req_i,
+
+  output ibex_pkg::v_resp_t v_resp_o,
+
+  // Memory bridge (simple 32-bit request/response)
+  output logic               mem_req_valid_o,
+  input  logic               mem_req_ready_i,
+  output logic [31:0]        mem_req_addr_o,
+  output logic               mem_req_write_o,
+  output logic [31:0]        mem_req_wdata_o,
+  output logic [3:0]         mem_req_wstrb_o,
+
+  input  logic               mem_resp_valid_i,
+  input  logic [31:0]        mem_resp_rdata_i,
+  input  logic               mem_resp_err_i
+);
+
+  // ── Internal submodules (suggested structure) ───────────────────────────────
+  // V-CSR: vl, vtype, vlenb(=16)
+  // V-Decode: extracts opcode fields → micro-op descriptor
+  // V-Control: FSM; iterates idx=0..vl-1, issues LSU ops, handles tails/misalignment
+  // V-RegFile: 32 x 128b, byte-write mask (16 bytes)
+  // V-AGU/LSU: address generation + pack/unpack (unit stride; EEW=8/16)
+  // V-WB: writes back vector data; outputs rd data for vsetvli
+
+  // For bring-up you can keep everything here and refactor later.
+  // Tie-offs for unimplemented features:
+  assign v_req_ready_o   = /* ready when VU IDLE */ ... ;
+  assign v_resp_o        = '{done:..., trap:..., rd_wdata:..., rd_we:..., cause:5'(0)};
+
+  // Memory bridge signals driven by your LSU micro-engine.
+  // You’ll likely implement a small FSM that splits misaligned accesses
+  // into two 32-bit beats and assembles bytes.
+
+endmodule
