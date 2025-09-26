@@ -9,6 +9,25 @@
 package ibex_pkg;
 
   ////////////////
+  // Vector Pkg //
+  ////////////////
+  // Vector request from Ibex to the Vector Unit (VU)
+  typedef struct packed {
+    logic [31:0] insn;        // full instruction word (RVV encoding)
+    logic [31:0] rs1_val;     // scalar base addr (for loads/stores) or vsetvli's AVL
+    logic  [4:0] rd_idx;      // scalar rd idx (for vsetvli writeback to x-reg)
+  } v_req_t;
+
+  // Vector response from VU to Ibex
+  typedef struct packed {
+    logic        done;        // VU completed this instruction
+    logic        trap;        // memory fault or illegal
+    logic [31:0] rd_wdata;    // value to write into scalar rd (only for vsetvli)
+    logic        rd_we;       // write enable for scalar rd (vsetvli rd!=x0)
+    logic  [4:0] cause;       // optional: trap cause (load/store fault)
+  } v_resp_t;
+
+  ////////////////
   // IO Structs //
   ////////////////
 
