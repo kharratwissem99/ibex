@@ -430,13 +430,14 @@ module ibex_id_stage #(
   ///////////////////////
 
   // Suppress register write if there is an illegal CSR access or instruction is not executing
-  assign rf_we_id_o = rf_we_raw & instr_executing & ~illegal_csr_insn_i;
+  assign rf_we_id_o = (rf_we_raw & instr_executing & ~illegal_csr_insn_i) | rf_we_vec;
 
   // Register file write data mux
   always_comb begin : rf_wdata_id_mux
     unique case (rf_wdata_sel)
       RF_WD_EX:  rf_wdata_id_o = result_ex_i;
       RF_WD_CSR: rf_wdata_id_o = csr_rdata_i;
+      RF_WD_VEC: rf_wdata_id_o = v_resp_i.rd_wdata;
       default:   rf_wdata_id_o = result_ex_i;
     endcase
   end
@@ -523,9 +524,62 @@ module ibex_id_stage #(
     .jump_in_dec_o  (jump_in_dec),
     .branch_in_dec_o(branch_in_dec)
 
-    .v_req_valid_o (v_req_valid),
+    .v_req_valid_o (v_req_valid_decoder),
     .v_req_o       (v_req),
   );
+
+  typedef enum logic [1:0] {V_IF_IDLE, V_IF_SEND_REQUEST, V_IF_WAIT_FOR_RESP, V_IF_WORK_ON_RESP} v_unit_if_state_t;
+  v_unit_if_state_t vector_unit_if_next_state, vector_unit_if_state;
+  // Vector Unit Interface State Machine
+  always_ff @(posedge clk_i or negedge rst_ni) begin : vector_unit_if_state_ff
+    if (!rst_ni) begin
+      vector_unit_if_state <= V_IF_IDLE;
+    end else begin
+      vector_unit_if_state <= vector_unit_if_next_state;
+    end
+  end
+  logic v_req_valid_decoder;
+  logic stall_vector_request;
+  logic rf_we_vec;
+
+  always_comb begin: vector_unit_if
+    vector_unit_if_next_state = vector_unit_if_state;
+    v_req_valid = 1'b0;
+    stall_vector_request = 1'b0;
+    rf_we_vec = 1'b0;
+    unique case (vector_unit_if_state)
+      V_IF_IDLE: begin
+        v_req_valid = 1'b0;
+        stall_vector_request = 1'b0;
+        if (v_req_valid_decoder) begin
+          vector_unit_if_next_state = V_IF_SEND_REQUEST;
+        end
+      end
+      V_IF_SEND_REQUEST: begin
+        stall_vector_request = 1'b1;
+        v_req_valid = 1'b1;
+        vector_unit_if_next_state = V_IF_WAIT_FOR_RESP;
+      end
+      V_IF_WAIT_FOR_RESP: begin
+        stall_vector_request = 1'b1;
+        v_req_valid = 1'b0;
+        if (v_resp_i.done) begin
+          if (v_resp_i.rd_we) begin
+            vector_unit_if_next_state = V_IF_WORK_ON_RESP;
+          end
+          else begin
+            vector_unit_if_next_state = V_IF_IDLE;
+          end
+        end
+      end
+      V_IF_WORK_ON_RESP: begin
+        stall_vector_request = 1'b1;
+        v_req_valid = 1'b0;
+        rf_we_vec = 1'b1;
+        vector_unit_if_next_state = V_IF_IDLE;
+
+      end
+  end
 
   // Flush pipe on most CSR modification. Some CSR modifications alter how instructions execute
   // (e.g. the PMP CSRs) so this ensures all instructions always see the latest architectural state
@@ -893,13 +947,13 @@ module ibex_id_stage #(
   // Stall ID/EX stage for reason that relates to instruction in ID/EX, update assertion below if
   // modifying this.
   assign stall_id = stall_ld_hz | stall_mem | stall_multdiv | stall_jump | stall_branch |
-                      stall_alu;
+                      stall_alu | stall_vector_request;
 
   // Generally illegal instructions have no reason to stall, however they must still stall waiting
   // for outstanding memory requests so exceptions related to them take priority over the illegal
   // instruction exception.
   `ASSERT(IllegalInsnStallMustBeMemStall, illegal_insn_o & stall_id |-> stall_mem &
-    ~(stall_ld_hz | stall_multdiv | stall_jump | stall_branch | stall_alu))
+    ~(stall_ld_hz | stall_multdiv | stall_jump | stall_branch | stall_alu | stall_vector_request))
 
   assign instr_done = ~stall_id & ~flush_id & instr_executing;
 

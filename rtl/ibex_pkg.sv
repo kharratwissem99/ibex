@@ -289,7 +289,8 @@ package ibex_pkg;
   // Regfile write data selection
   typedef enum logic {
     RF_WD_EX,
-    RF_WD_CSR
+    RF_WD_CSR,
+    RF_WD_VEC
   } rf_wd_sel_e;
 
   // Controller FSM state encoding

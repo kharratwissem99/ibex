@@ -100,8 +100,6 @@ module ibex_decoder #(
   // Vector Unit Interface
   output  logic                     v_req_valid_o,
   output  ibex_pkg::v_req_t         v_req_o,
-  //input   logic                     v_req_ready_i,
-  //input   ibex_pkg::v_resp_t       v_resp_i
 );
 
 
@@ -131,8 +129,6 @@ module ibex_decoder #(
 
   logic v_req_valid,
   ibex_pkg::v_req_t v_req,
-  logic v_req_ready,
-  ibex_pkg::v_req_t v_resp,
 
   assign v_req_valid_o = v_req_valid;
   assign v_req_o       = v_req;
@@ -270,24 +266,30 @@ module ibex_decoder #(
         else begin
           if (instr[14:12] == 3'b000) begin
             // VSETLI
+            // send the request to the vector unit
             v_req.insn = instr;
             v_req.rs1_val = instr_rs1;
             v_req.rd_idx = instr_rd;
             v_req_valid = 1'b1;
+            rf_wdata_sel_o = RF_WD_VEC;
           end
           else if (instr[14:12] == 3'b001) begin
             // VSE
+            // send the request to the vector unit
             v_req.insn = instr;
             v_req.rs1_val = instr_rs1;
             v_req.rd_idx = instr_rd;
             v_req_valid = 1'b1;
+            rf_wdata_sel_o = RF_WD_VEC;
           end
           else if (instr[14:12] == 3'b010) begin
             // VSE
+            // send the request to the vector unit
             v_req.insn = instr;
             v_req.rs1_val = instr_rs1;
             v_req.rd_idx = instr_rd;
             v_req_valid = 1'b1;
+            rf_wdata_sel_o = RF_WD_VEC;
           end
           else begin
             illegal_insn = 1'b1;

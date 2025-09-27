@@ -104,6 +104,7 @@ module ibex_core import ibex_pkg::*; #(
   input  logic                         ic_scr_key_valid_i,
   output logic                         ic_scr_key_req_o,
 
+  // Vector Unit Interface
   output logic                         v_req_valid_o,
   output ibex_pkg::v_req_t v_req_o,
   input  logic                       v_req_ready_i, // internally not connected yet
