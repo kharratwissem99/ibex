@@ -528,58 +528,139 @@ module ibex_id_stage #(
     .v_req_o       (v_req),
   );
 
-  typedef enum logic [1:0] {V_IF_IDLE, V_IF_SEND_REQUEST, V_IF_WAIT_FOR_RESP, V_IF_WORK_ON_RESP} v_unit_if_state_t;
-  v_unit_if_state_t vector_unit_if_next_state, vector_unit_if_state;
-  // Vector Unit Interface State Machine
-  always_ff @(posedge clk_i or negedge rst_ni) begin : vector_unit_if_state_ff
+  // typedef enum logic [1:0] {V_IF_IDLE, V_IF_SEND_REQUEST, V_IF_WAIT_FOR_RESP, V_IF_WORK_ON_RESP} v_unit_if_state_t;
+  // v_unit_if_state_t vector_unit_if_next_state, vector_unit_if_state;
+  // // Vector Unit Interface State Machine
+  // always_ff @(posedge clk_i or negedge rst_ni) begin : vector_unit_if_state_ff
+  //   if (!rst_ni) begin
+  //     vector_unit_if_state <= V_IF_IDLE;
+  //   end else begin
+  //     vector_unit_if_state <= vector_unit_if_next_state;
+  //   end
+  // end
+  // logic v_req_valid_decoder;
+  // logic stall_vector_request;
+  // logic rf_we_vec;
+
+  // always_comb begin: vector_unit_if
+  //   vector_unit_if_next_state = vector_unit_if_state;
+  //   v_req_valid = 1'b0;
+  //   stall_vector_request = 1'b0;
+  //   rf_we_vec = 1'b0;
+  //   unique case (vector_unit_if_state)
+  //     V_IF_IDLE: begin
+  //       v_req_valid = 1'b0;
+  //       stall_vector_request = 1'b0;
+  //       if (v_req_valid_decoder) begin
+  //         vector_unit_if_next_state = V_IF_SEND_REQUEST;
+  //       end
+  //     end
+  //     V_IF_SEND_REQUEST: begin
+  //       stall_vector_request = 1'b1;
+  //       v_req_valid = 1'b1;
+  //       vector_unit_if_next_state = V_IF_WAIT_FOR_RESP;
+  //     end
+  //     V_IF_WAIT_FOR_RESP: begin
+  //       stall_vector_request = 1'b1;
+  //       v_req_valid = 1'b0;
+  //       if (v_resp_i.done) begin
+  //         if (v_resp_i.rd_we) begin
+  //           vector_unit_if_next_state = V_IF_WORK_ON_RESP;
+  //         end
+  //         else begin
+  //           vector_unit_if_next_state = V_IF_IDLE;
+  //         end
+  //       end
+  //     end
+  //     V_IF_WORK_ON_RESP: begin
+  //       stall_vector_request = 1'b1;
+  //       v_req_valid = 1'b0;
+  //       rf_we_vec = 1'b1;
+  //       vector_unit_if_next_state = V_IF_IDLE;
+
+  //     end
+  // end
+
+  typedef enum logic [1:0] {
+    V_IF_IDLE, V_IF_SEND, V_IF_WAIT, V_IF_WB
+  } v_if_state_e;
+
+  v_if_state_e v_if_q, v_if_d;
+
+  logic        v_req_valid_o;
+  logic        v_req_ready_i;     // from VU
+  logic        core_flush_i;      // from pipeline control (branch/except)
+  logic        v_busy;            // convenience
+  logic        rf_we_vec;
+
+  logic [31:0] v_req_insn_q, v_req_rs1_q;
+  logic  [4:0] v_req_rd_q;
+
+  logic        v_req_fire = v_req_valid_o & v_req_ready_i;
+  logic        v_done     = v_resp_i.done;
+  logic        v_trap     = v_resp_i.trap;
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      vector_unit_if_state <= V_IF_IDLE;
+      v_if_q <= V_IF_IDLE;
     end else begin
-      vector_unit_if_state <= vector_unit_if_next_state;
+      v_if_q <= v_if_d;
+      // Latch payload when we decide to send
+      if (v_if_q == V_IF_IDLE && v_req_valid_decoder && !core_flush_i) begin
+        v_req_insn_q <= instr_rdata_id;   // capture instruction word
+        v_req_rs1_q  <= rs1_data_id;
+        v_req_rd_q   <= rd_addr_id;
+      end
     end
   end
-  logic v_req_valid_decoder;
-  logic stall_vector_request;
-  logic rf_we_vec;
 
-  always_comb begin: vector_unit_if
-    vector_unit_if_next_state = vector_unit_if_state;
-    v_req_valid = 1'b0;
-    stall_vector_request = 1'b0;
-    rf_we_vec = 1'b0;
-    unique case (vector_unit_if_state)
+  always_comb begin
+    v_if_d          = v_if_q;
+    v_req_valid_o   = 1'b0;
+    rf_we_vec       = 1'b0;
+
+    // default: stall while not IDLE
+    v_busy = (v_if_q != V_IF_IDLE);
+    stall_vector_request = v_busy;
+
+    unique case (v_if_q)
       V_IF_IDLE: begin
-        v_req_valid = 1'b0;
         stall_vector_request = 1'b0;
-        if (v_req_valid_decoder) begin
-          vector_unit_if_next_state = V_IF_SEND_REQUEST;
+        if (v_req_valid_decoder && !core_flush_i) begin
+          v_if_d = V_IF_SEND;
         end
       end
-      V_IF_SEND_REQUEST: begin
-        stall_vector_request = 1'b1;
-        v_req_valid = 1'b1;
-        vector_unit_if_next_state = V_IF_WAIT_FOR_RESP;
-      end
-      V_IF_WAIT_FOR_RESP: begin
-        stall_vector_request = 1'b1;
-        v_req_valid = 1'b0;
-        if (v_resp_i.done) begin
-          if (v_resp_i.rd_we) begin
-            vector_unit_if_next_state = V_IF_WORK_ON_RESP;
-          end
-          else begin
-            vector_unit_if_next_state = V_IF_IDLE;
-          end
-        end
-      end
-      V_IF_WORK_ON_RESP: begin
-        stall_vector_request = 1'b1;
-        v_req_valid = 1'b0;
-        rf_we_vec = 1'b1;
-        vector_unit_if_next_state = V_IF_IDLE;
 
+      V_IF_SEND: begin
+        // Hold valid until VU ready
+        v_req_valid_o = 1'b1;
+        if (v_req_fire) v_if_d = V_IF_WAIT;
+        // If a flush arrives before fire, you may drop back to IDLE
+        if (core_flush_i) v_if_d = V_IF_IDLE;
       end
+
+      V_IF_WAIT: begin
+        // Stall core while waiting for response
+        if (v_done) begin
+          if (v_trap) begin
+            // raise/flag exception here; no rd write
+            v_if_d = V_IF_IDLE;
+          end else if (v_resp_i.rd_we) begin
+            v_if_d = V_IF_WB;
+          end else begin
+            v_if_d = V_IF_IDLE;
+          end
+        end
+      end
+
+      V_IF_WB: begin
+        // Single-cycle writeback to scalar rd
+        if (v_req_rd_q != '0) rf_we_vec = 1'b1;
+        v_if_d = V_IF_IDLE;
+      end
+    endcase
   end
+
 
   // Flush pipe on most CSR modification. Some CSR modifications alter how instructions execute
   // (e.g. the PMP CSRs) so this ensures all instructions always see the latest architectural state
