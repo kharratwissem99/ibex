@@ -95,8 +95,15 @@ module ibex_decoder #(
 
   // jump/branches
   output logic                 jump_in_dec_o,         // jump is being calculated in ALU
-  output logic                 branch_in_dec_o
+  output logic                 branch_in_dec_o,
+
+  // Vector Unit Interface
+  output  logic                     v_req_valid_o,
+  output  ibex_pkg::v_req_t         v_req_o,
+  //input   logic                     v_req_ready_i,
+  //input   ibex_pkg::v_resp_t       v_resp_i
 );
+
 
   import ibex_pkg::*;
 
@@ -121,6 +128,14 @@ module ibex_decoder #(
 
   opcode_e     opcode;
   opcode_e     opcode_alu;
+
+  logic v_req_valid,
+  ibex_pkg::v_req_t v_req,
+  logic v_req_ready,
+  ibex_pkg::v_req_t v_resp,
+
+  assign v_req_valid_o = v_req_valid;
+  assign v_req_o       = v_req;
 
   // To help timing the flops containing the current instruction are replicated to reduce fan-out.
   // instr_alu is used to determine the ALU control logic and associated operand/imm select signals
@@ -237,7 +252,48 @@ module ibex_decoder #(
 
     opcode                = opcode_e'(instr[6:0]);
 
+    // added vor the vector 
+    v_req.insn = instr;
+    v_req.rs1_val = instr_rs1;
+    v_req.rd_idx = instr_rd;
+    v_req_valid = 1'b0;
+
     unique case (opcode)
+
+      //////////////////
+      // Vector Load////
+      //////////////////
+      OPCODE_PROXY: begin
+        if (instr[31:25] != 7'b1) begin
+          illegal_insn = 1'b1;
+        end
+        else begin
+          if (instr[14:12] == 3'b000) begin
+            // VSETLI
+            v_req.insn = instr;
+            v_req.rs1_val = instr_rs1;
+            v_req.rd_idx = instr_rd;
+            v_req_valid = 1'b1;
+          end
+          else if (instr[14:12] == 3'b001) begin
+            // VSE
+            v_req.insn = instr;
+            v_req.rs1_val = instr_rs1;
+            v_req.rd_idx = instr_rd;
+            v_req_valid = 1'b1;
+          end
+          else if (instr[14:12] == 3'b010) begin
+            // VSE
+            v_req.insn = instr;
+            v_req.rs1_val = instr_rs1;
+            v_req.rd_idx = instr_rd;
+            v_req_valid = 1'b1;
+          end
+          else begin
+            illegal_insn = 1'b1;
+          end
+        end
+      end
 
       ///////////
       // Jumps //

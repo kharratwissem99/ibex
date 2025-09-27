@@ -189,10 +189,22 @@ module ibex_id_stage #(
                                                         // access to finish before proceeding
   output logic                      perf_mul_wait_o,
   output logic                      perf_div_wait_o,
-  output logic                      instr_id_done_o
+  output logic                      instr_id_done_o,
+
+  // Vector Unit Interface
+  output  logic                     v_req_valid_o,
+  output  ibex_pkg::v_req_t         v_req_o,
+  input logic                       v_req_ready_i,
+  input ibex_pkg::v_resp_t          v_resp_i
 );
 
   import ibex_pkg::*;
+
+  // Vector Unit Interface
+  logic                       v_req_valid,
+  ibex_pkg::v_req_t           v_req,
+  logic                       v_req_ready,
+  ibex_pkg::v_resp_t          v_resp
 
   // Decoder/Controller, ID stage internal signals
   logic        illegal_insn_dec;
@@ -510,6 +522,9 @@ module ibex_id_stage #(
     // jump/branches
     .jump_in_dec_o  (jump_in_dec),
     .branch_in_dec_o(branch_in_dec)
+
+    .v_req_valid_o (v_req_valid),
+    .v_req_o       (v_req),
   );
 
   // Flush pipe on most CSR modification. Some CSR modifications alter how instructions execute

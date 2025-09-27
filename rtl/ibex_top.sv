@@ -305,6 +305,34 @@ module ibex_top import ibex_pkg::*; #(
     assign unused_intg = ^{instr_rdata_intg_i, data_rdata_intg_i};
   end
 
+  logic v_req_valid,
+  ibex_pkg::v_req_t v_req,
+  logic v_req_ready,
+  ibex_pkg::v_req_t v_resp,
+
+  ibex_vector_unit #(
+    .VLEN_BITS(VLEN)
+  )(
+    .clk_i(clk),
+    .rst_ni(rst_ni),
+    .v_req_valid_i(v_req_valid),
+    .v_req_ready_o(v_req_ready),
+    .v_req_i(v_req),
+    .v_resp_o(v_resp),
+
+
+    // 32-bit memory interface TODO: will be later connected to memory
+    // .mem_req_valid_o(mem_req_valid),
+    // .mem_req_ready_i(mem_req_ready),
+    // .mem_req_addr_o(mem_req_addr),
+    // .mem_req_write_o(mem_req_write),
+    // .mem_req_wdata_o(mem_req_wdata),
+    // .mem_req_wstrb_o(mem_req_wstrb),
+    // .mem_resp_valid_i(mem_resp_valid),
+    // .mem_resp_rdata_i(mem_resp_rdata),
+    // .mem_resp_err_i(mem_resp_err)
+  );
+
   ibex_core #(
     .PMPEnable        (PMPEnable),
     .PMPGranularity   (PMPGranularity),
@@ -388,6 +416,12 @@ module ibex_top import ibex_pkg::*; #(
     .ic_data_rdata_i   (ic_data_rdata),
     .ic_scr_key_valid_i(scramble_key_valid_q),
     .ic_scr_key_req_o  (ic_scr_key_req),
+
+    // VU Interface
+    .v_req_valid_o (v_req_valid),
+    .v_req_o       (v_req),
+    .v_req_ready_i (v_req_ready), // internally not connected yet
+    .v_resp_i      (v_resp), // internally not connected yet
 
     .irq_software_i,
     .irq_timer_i,

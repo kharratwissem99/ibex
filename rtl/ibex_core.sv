@@ -104,6 +104,11 @@ module ibex_core import ibex_pkg::*; #(
   input  logic                         ic_scr_key_valid_i,
   output logic                         ic_scr_key_req_o,
 
+  output logic                         v_req_valid_o,
+  output ibex_pkg::v_req_t v_req_o,
+  input  logic                       v_req_ready_i, // internally not connected yet
+  input ibex_pkg::v_req_t v_resp_i, // internally not connected yet
+
   // Interrupt inputs
   input  logic                         irq_software_i,
   input  logic                         irq_timer_i,
@@ -168,6 +173,17 @@ module ibex_core import ibex_pkg::*; #(
   output logic                         alert_major_bus_o,
   output ibex_mubi_t                   core_busy_o
 );
+
+  // Vector Unit Interface
+  logic                     v_req_valid;
+  ibex_pkg::v_req_t         v_req;
+  logic                       v_req_ready;
+  ibex_pkg::v_resp_t          v_resp;
+
+  assign v_req_valid_o = v_req_valid;
+  assign v_req_o = v_req;
+  assign v_req_ready = v_req_ready_i;
+  assign v_resp = v_resp_i;
 
   localparam int unsigned PMPNumChan      = 3;
   // SEC_CM: CORE.DATA_REG_SW.SCA
@@ -509,7 +525,12 @@ module ibex_core import ibex_pkg::*; #(
     .id_in_ready_i(id_in_ready),
 
     .pc_mismatch_alert_o(pc_mismatch_alert),
-    .if_busy_o          (if_busy)
+    .if_busy_o          (if_busy),
+
+    .v_req_valid_o (v_req_valid),
+    .v_req_o       (v_req),
+    .v_req_ready_i (v_req_ready), // internally not connected yet
+    .v_resp_i      (v_resp), // internally not connected yet
   );
 
   // Core is waiting for the ISide when ID/EX stage is ready for a new instruction but none are
