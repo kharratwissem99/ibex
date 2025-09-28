@@ -200,12 +200,6 @@ module ibex_id_stage #(
 
   import ibex_pkg::*;
 
-  // Vector Unit Interface
-  logic                       v_req_valid,
-  ibex_pkg::v_req_t           v_req,
-  logic                       v_req_ready,
-  ibex_pkg::v_resp_t          v_resp
-
   // Decoder/Controller, ID stage internal signals
   logic        illegal_insn_dec;
   logic        illegal_dret_insn;
@@ -525,7 +519,7 @@ module ibex_id_stage #(
     .branch_in_dec_o(branch_in_dec)
 
     .v_req_valid_o (v_req_valid_decoder),
-    .v_req_o       (v_req),
+    .v_req_o       (v_req_o),
   );
 
   // typedef enum logic [1:0] {V_IF_IDLE, V_IF_SEND_REQUEST, V_IF_WAIT_FOR_RESP, V_IF_WORK_ON_RESP} v_unit_if_state_t;
@@ -581,24 +575,34 @@ module ibex_id_stage #(
   //     end
   // end
 
+  // Vector Unit Interface
+  // ibex_pkg::v_req_t           v_req; // directly from decoder
+  logic                       v_req_valid;
+  logic                       v_req_ready;
+  ibex_pkg::v_resp_t          v_resp;
+
+  logic v_req_valid_decoder; // from decoder
+
+  assign v_req_valid_o = v_req_valid;
+  assign v_req_ready = v_req_ready_i;
+  assign v_resp = v_resp_i;
+
   typedef enum logic [1:0] {
     V_IF_IDLE, V_IF_SEND, V_IF_WAIT, V_IF_WB
   } v_if_state_e;
 
   v_if_state_e v_if_q, v_if_d;
 
-  logic        v_req_valid_o;
-  logic        v_req_ready_i;     // from VU
-  logic        core_flush_i;      // from pipeline control (branch/except)
-  logic        v_busy;            // convenience
+  // logic        core_flush_i;      // from pipeline control (branch/except) // todo: for now we assume there is no flush between valid and ready
+  // logic        v_busy;            // convenience
   logic        rf_we_vec;
 
-  logic [31:0] v_req_insn_q, v_req_rs1_q;
-  logic  [4:0] v_req_rd_q;
+  // logic [31:0] v_req_insn_q, v_req_rs1_q;
+  // logic  [4:0] v_req_rd_q;
 
-  logic        v_req_fire = v_req_valid_o & v_req_ready_i;
-  logic        v_done     = v_resp_i.done;
-  logic        v_trap     = v_resp_i.trap;
+  // logic        v_req_fire = v_req_valid_o & v_req_ready_i;
+  // logic        v_done     = v_resp_i.done;
+  // logic        v_trap     = v_resp_i.trap;
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
@@ -606,46 +610,54 @@ module ibex_id_stage #(
     end else begin
       v_if_q <= v_if_d;
       // Latch payload when we decide to send
-      if (v_if_q == V_IF_IDLE && v_req_valid_decoder && !core_flush_i) begin
-        v_req_insn_q <= instr_rdata_id;   // capture instruction word
-        v_req_rs1_q  <= rs1_data_id;
-        v_req_rd_q   <= rd_addr_id;
-      end
+      // if (v_if_q == V_IF_IDLE && v_req_valid_decoder && !core_flush_i) begin // for now we assume there is no flush between valid and ready
+      // if (v_if_q == V_IF_IDLE && v_req_valid_decoder) begin
+      //   v_req_insn_q <= instr_rdata_id;   // capture instruction word
+      //   v_req_rs1_q  <= rs1_data_id;
+      //   v_req_rd_q   <= rd_addr_id;
+      // end
     end
   end
 
   always_comb begin
-    v_if_d          = v_if_q;
-    v_req_valid_o   = 1'b0;
-    rf_we_vec       = 1'b0;
+    v_if_d               = v_if_q; //state hold
+    v_req_valid          = 1'b0;
+    rf_we_vec            = 1'b0;
+    stall_vector_request = 1'b0;
 
     // default: stall while not IDLE
-    v_busy = (v_if_q != V_IF_IDLE);
-    stall_vector_request = v_busy;
+    // v_busy = (v_if_q != V_IF_IDLE);
+    // stall_vector_request = v_busy;
 
     unique case (v_if_q)
       V_IF_IDLE: begin
-        stall_vector_request = 1'b0;
-        if (v_req_valid_decoder && !core_flush_i) begin
+        // if (v_req_valid_decoder && !core_flush_i) begin // todo: for now we assume there is no flush between valid and ready
+        if (v_req_valid_decoder) begin
           v_if_d = V_IF_SEND;
         end
       end
 
       V_IF_SEND: begin
-        // Hold valid until VU ready
-        v_req_valid_o = 1'b1;
-        if (v_req_fire) v_if_d = V_IF_WAIT;
+        // Hold valid until VU ready(not busy)
+        v_req_valid          = 1'b1;
+        stall_vector_request = 1'b1;
+        rf_we_vec            = 1'b0;
+        if (v_req_ready) v_if_d = V_IF_WAIT;
         // If a flush arrives before fire, you may drop back to IDLE
-        if (core_flush_i) v_if_d = V_IF_IDLE;
+        // if (core_flush_i) v_if_d = V_IF_IDLE; // todo: for now we assume there is no flush between valid and ready
       end
 
       V_IF_WAIT: begin
         // Stall core while waiting for response
-        if (v_done) begin
-          if (v_trap) begin
+        v_req_valid          = 1'b1;
+        stall_vector_request = 1'b1;
+        rf_we_vec            = 1'b0;
+        if (v_resp.v_done) begin
+          if (v_resp.v_trap) begin
             // raise/flag exception here; no rd write
+            // something wrong happened in VU, you can add code to handle this exception
             v_if_d = V_IF_IDLE;
-          end else if (v_resp_i.rd_we) begin
+          end else if (v_resp.rd_we) begin
             v_if_d = V_IF_WB;
           end else begin
             v_if_d = V_IF_IDLE;
@@ -654,8 +666,11 @@ module ibex_id_stage #(
       end
 
       V_IF_WB: begin
+        v_req_valid          = 1'b1;
+        stall_vector_request = 1'b1;
+        rf_we_vec            = 1'b1;
         // Single-cycle writeback to scalar rd
-        if (v_req_rd_q != '0) rf_we_vec = 1'b1;
+        // if (v_req_rd_q != '0) rf_we_vec = 1'b1;
         v_if_d = V_IF_IDLE;
       end
     endcase

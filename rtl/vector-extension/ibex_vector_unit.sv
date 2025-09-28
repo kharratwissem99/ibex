@@ -39,9 +39,13 @@ module ibex_vector_unit #(
     v_req_ready_o = 1'b0;
 
     case (state_q)
-      IDLE: if (v_req_valid_i) state_d = DECODE;
+      IDLE: begin
+        v_req_ready_o = 1'b1; // ready to take new request
+        if (v_req_valid_i) state_d = DECODE;
+      end
 
       DECODE: begin
+        v_req_ready_o = 1'b0;
         // here you’d check v_req_i.insn opcode/funct
         // assume proxy => always vsetvli
         state_d = EXECUTE;
@@ -49,6 +53,7 @@ module ibex_vector_unit #(
 
       EXECUTE: begin
         // parse SEW from imm or funct3 (proxy encoding)
+        v_req_ready_o = 1'b0;
         logic [1:0] sew_sel = v_req_i.insn[21:20]; // example
         logic [31:0] avl    = v_req_i.rs1_val;
 
@@ -67,6 +72,7 @@ module ibex_vector_unit #(
       end
 
       WRITEBK: begin
+        v_req_ready_o = 1'b0;
         v_resp_o.done     = 1'b1;
         v_resp_o.trap     = 1'b0;
         v_resp_o.rd_we    = (v_req_i.rd_idx != 0);
@@ -76,7 +82,7 @@ module ibex_vector_unit #(
 
       DONE: begin
         // wait until Ibex sees done, then back to IDLE
-        v_req_ready_o = 1'b1;
+        v_req_ready_o = 1'b0;
         if (!v_req_valid_i) state_d = IDLE;
       end
     endcase
