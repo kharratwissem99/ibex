@@ -1,0 +1,15 @@
+build with:
+fusesoc --cores-root=. run --tool=xcelium --target=sim --setup --build         lowrisc:ibex:ibex_simple_system $(util/ibex_config.py maxperf fusesoc_opts)     --help
+
+run with:
+fusesoc --cores-root=. run --tool=xcelium --target=sim --run \
+  lowrisc:ibex:ibex_simple_system $(util/ibex_config.py maxperf fusesoc_opts)
+
+build + run:
+fusesoc --cores-root=. run --tool=xcelium --target=sim \
+  lowrisc:ibex:ibex_simple_system $(util/ibex_config.py small fusesoc_opts)
+
+====================================================
+fusesoc --cores-root=. run --target=sim --tool=xcelium --setup --build lowrisc:ibex:ibex_simple_system --RV32E=0 --RV32M=ibex_pkg::RV32MFast --SRAMInitFile="/home/kharrat/Desktop/repos/ibex/hello_test.mem"
+
+make run-gui
