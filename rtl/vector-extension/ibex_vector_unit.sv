@@ -1,5 +1,6 @@
 // ibex_vector_unit.sv
-`include "../ibex_pkg.sv"
+// `include "ibex_pkg.sv"
+`timescale 1ns/1ps
 
 module ibex_vector_unit #(
   parameter int VLEN_BITS = 128
@@ -13,15 +14,15 @@ module ibex_vector_unit #(
   output logic                     v_req_ready_o,
   output ibex_pkg::v_resp_t        v_resp_o,
   // 32-bit memory interface
-  // output logic                     mem_req_valid_o,
-  // input  logic                     mem_req_ready_i,
-  // output logic [31:0]              mem_req_addr_o,
-  // output logic                     mem_req_write_o,
-  // output logic [31:0]              mem_req_wdata_o,
-  // output logic [3:0]               mem_req_wstrb_o,
-  // input  logic                     mem_resp_valid_i,
-  // input  logic [31:0]              mem_resp_rdata_i,
-  // input  logic                     mem_resp_err_i
+  output logic                     mem_req_valid_o,
+  input  logic                     mem_req_ready_i,
+  output logic [31:0]              mem_req_addr_o,
+  output logic                     mem_req_write_o,
+  output logic [31:0]              mem_req_wdata_o,
+  output logic [3:0]               mem_req_wstrb_o,
+  input  logic                     mem_resp_valid_i,
+  input  logic [31:0]              mem_resp_rdata_i,
+  input  logic                     mem_resp_err_i
 );
 
   // inside ibex_vector_unit.sv
@@ -31,6 +32,11 @@ module ibex_vector_unit #(
   // simple CSR regs
   logic [4:0] vl_q;      // up to 16 (for SEW=8) or 8 (for SEW=16)
   logic [1:0] sew_q;     // 0=8b, 1=16b
+
+  logic [1:0] sew_sel; // example
+  logic [31:0] avl;
+
+  logic [4:0] max_elems;
 
   // next-state logic
   always_comb begin
@@ -54,8 +60,8 @@ module ibex_vector_unit #(
       EXECUTE: begin
         // parse SEW from imm or funct3 (proxy encoding)
         v_req_ready_o = 1'b0;
-        logic [1:0] sew_sel = v_req_i.insn[21:20]; // example
-        logic [31:0] avl    = v_req_i.rs1_val;
+        sew_sel = v_req_i.insn[21:20]; // example
+        avl    = v_req_i.rs1_val;
 
         case (sew_sel)
           2'b00: sew_q = 2'd0; // SEW=8
@@ -64,7 +70,7 @@ module ibex_vector_unit #(
         endcase
 
         // compute max elements per vreg
-        logic [4:0] max_elems = (sew_q==0) ? 16 : 8;
+        max_elems = (sew_q==0) ? 16 : 8;
 
         vl_q = (avl < max_elems) ? avl[4:0] : max_elems;
 
@@ -78,13 +84,14 @@ module ibex_vector_unit #(
         v_resp_o.rd_we    = (v_req_i.rd_idx != 0);
         v_resp_o.rd_wdata = {27'd0, vl_q}; // return VL in rd
         state_d           = DONE;
-      end
-
-      DONE: begin
-        // wait until Ibex sees done, then back to IDLE
-        v_req_ready_o = 1'b0;
         if (!v_req_valid_i) state_d = IDLE;
       end
+
+      // DONE: begin
+      //   // wait until Ibex sees done, then back to IDLE
+      //   v_req_ready_o = 1'b0;
+      //   if (!v_req_valid_i) state_d = IDLE;
+      // end
     endcase
   end
 
