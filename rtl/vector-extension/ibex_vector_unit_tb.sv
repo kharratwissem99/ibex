@@ -117,15 +117,11 @@ module ibex_vector_unit_tb;
 
     // If your VU exposes v_req_ready_o, poll it; here we just pulse valid for 1 cycle.
     v_req_valid   = 1'b1;
-    // @(posedge clk);
-    // v_req_valid   = 1'b0;
+    @(posedge clk);
+    v_req_valid   = 1'b0;
 
     // Wait for DONE
     do @(posedge clk); while (v_resp.done == 1'b0);
-
-    
-    @(posedge clk);
-    v_req_valid   = 1'b0;
 
     rd_we    = v_resp.rd_we;
     rd_wdata = v_resp.rd_wdata;

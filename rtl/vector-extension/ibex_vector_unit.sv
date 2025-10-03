@@ -26,7 +26,7 @@ module ibex_vector_unit #(
 );
 
   // inside ibex_vector_unit.sv
-  typedef enum logic [2:0] {IDLE, DECODE, EXECUTE, WRITEBK, DONE} vstate_e;
+  typedef enum logic [1:0] {IDLE, DECODE, EXECUTE, WRITEBK} vstate_e;
   vstate_e state_q, state_d;
 
   // simple CSR regs
@@ -83,7 +83,7 @@ module ibex_vector_unit #(
         v_resp_o.trap     = 1'b0;
         v_resp_o.rd_we    = (v_req_i.rd_idx != 0);
         v_resp_o.rd_wdata = {27'd0, vl_q}; // return VL in rd
-        state_d           = DONE;
+        // state_d           = DONE;
         if (!v_req_valid_i) state_d = IDLE;
       end
 
