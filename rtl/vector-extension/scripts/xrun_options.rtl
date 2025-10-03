@@ -1,0 +1,5 @@
+-sv
+-gui
+-access
++rwc
+-f scripts/dut_src_list.txt

@@ -1,4 +1,8 @@
-xrun*
+xrun.history
+xrun.log
+xrun.key
+simvision*
 xcelium*
 waves*
 .simvision
+questa_local
