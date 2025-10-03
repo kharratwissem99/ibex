@@ -159,6 +159,7 @@ module ibex_vector_unit_tb;
 
     $display("[TB] Test1 OK: SEW=8, AVL=20 => VL=%0d", rd_wdata1[4:0]);
 
+    @(posedge clk);
     // === Test 2: SEW=16, AVL=5 -> VL should be 5 (max 8)
     insn2 = make_proxy_vsetvli(3'b001 /*SEW=16*/, 5'd11 /*rd=x11*/);
 

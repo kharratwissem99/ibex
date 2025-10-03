@@ -81,10 +81,11 @@ module ibex_vector_unit #(
         v_req_ready_o = 1'b0;
         v_resp_o.done     = 1'b1;
         v_resp_o.trap     = 1'b0;
+        // in the future maybe we will directly write to register file
+        // here we just return the value
         v_resp_o.rd_we    = (v_req_i.rd_idx != 0);
         v_resp_o.rd_wdata = {27'd0, vl_q}; // return VL in rd
-        // state_d           = DONE;
-        if (!v_req_valid_i) state_d = IDLE;
+        state_d = IDLE;
       end
 
       // DONE: begin
