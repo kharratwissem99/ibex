@@ -50,6 +50,7 @@ module ibex_vector_unit #(
 
   logic lsu_start;
   logic lsu_done;
+  logic lsu_fault;
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
@@ -213,5 +214,113 @@ module ibex_vector_unit #(
     .vrf_peek_idx_i (vd_idx_q)
   `endif
   );
+
+  logic [31:0] base_q;
+  logic [4:0] vd_idx_q;
+  // ---- LSU micro-FSM ----
+  // will be later moved to a load store unit module
+  logic  [4:0] idx_q, idx_d;      // 0..15 (element index)
+
+  // these are for lsuv module
+  // assign base_q = base_i; this are for lsuv module
+  // assign vd_idx_q = vd_idx_i;
+
+  assign base_q = req_rs1_d;
+  assign vd_idx_q = req_rd_d;
+
+  assign vrf_wr_vreg  = vd_idx_q; // destination vreg, we don't need to change it in the combinatorial logic
+  assign vrf_wr_bank  = idx_q[3:2];  // 4 lanes per bank when SEW=8
+
+  typedef enum logic [2:0] {LSU_IDLE, LSU_SETUP, LSU_REQ, LSU_WAIT, LSU_WRITE, LSU_DONE, LSU_FAULT} lsu_state_e;
+  lsu_state_e lsu_q, lsu_d;
+
+  always_comb begin
+    // defaults
+    lsu_d = lsu_q;
+    idx_d = idx_q;
+
+    lsu_done     = 1'b0;
+    lsu_fault    = 1'b0;
+
+    data_req_o = 1'b0;
+    data_addr_o  = '0;
+    data_we_o = 1'b0;
+    data_wdata_o = '0;
+    data_be_o = 4'b0000;
+
+    vrf_wr_en    = 1'b0;
+    vrf_wr_wdata = data_rdata_i;
+    vrf_wr_wstrb = 4'b0000;
+
+    // directly assigned see the assign statements above
+    // vrf_wr_vreg
+    // vrf_wr_bank 
+
+    unique case (lsu_q)
+      LSU_IDLE:  if (lsu_start) lsu_d = LSU_SETUP;
+
+      LSU_SETUP: begin
+        // Preconditions for this first cut (assert in TB):
+        // base_q[1:0] == 2'b00  &&  (vl_q % 4 == 0)
+        lsu_d = (vl_q == 0) ? LSU_DONE : LSU_REQ;
+      end
+
+      LSU_REQ: begin
+        data_req_o = 1'b1;
+        data_addr_o  = base_q + idx_q;   // EEW=1 byte, 4 bytes per beat
+        data_we_o = 1'b0;             // load
+        // wstrb=0000 on loads
+        if (data_gnt_i) lsu_d = LSU_WAIT;
+      end
+
+      LSU_WAIT: begin
+        if (data_rvalid_i) begin
+          if (data_err_i) begin
+            // lsu_fault = 1'b1;
+            lsu_d     = LSU_FAULT;
+          end else begin
+            // vrf_wr_en    = 1'b1;
+            // vrf_wr_wstrb = 4'b1111;         // aligned full word
+            lsu_d        = LSU_WRITE;
+          end
+        end
+      end
+
+      LSU_WRITE: begin
+        // advance by 4 lanes (one 32b bank)
+        vrf_wr_en    = 1'b1;
+        vrf_wr_wstrb = 4'b1111;         // aligned full word
+        if (idx_q + 5'd4 >= vl_q) begin // potensial overflow. todo check
+          lsu_d = LSU_DONE;
+        end else begin
+          lsu_d = LSU_REQ;
+          idx_d = idx_q + 5'd4;
+        end
+      end
+
+      LSU_FAULT: begin
+        lsu_fault = 1'b1;
+        lsu_done = 1'b1;
+        lsu_d     = LSU_IDLE;
+      end
+
+      LSU_DONE: begin
+        lsu_done = 1'b1;
+        lsu_d    = LSU_IDLE;
+      end
+    endcase
+  end
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      lsu_q <= LSU_IDLE;
+      idx_q <= '0;
+    end else begin
+      lsu_q <= lsu_d;
+      idx_q <= idx_d;
+    //   if (lsu_q == LSU_SETUP)       idx_q <= 5'd0;
+    //   else if (lsu_q == LSU_WRITE)  idx_q <= idx_q + 5'd4;
+    end
+  end
 
 endmodule
