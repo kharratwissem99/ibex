@@ -42,6 +42,9 @@ module ibex_vector_unit #(
   // simple CSR regs
   logic [4:0] vl_q;      // up to 16 (for SEW=8) or 8 (for SEW=16)
   logic [1:0] sew_q;     // 0=8b, 1=16b
+  // next-state for CSR regs
+  logic [4:0] vl_d;
+  logic [1:0] sew_d;
 
   logic [1:0] sew_sel; // example
   logic [31:0] avl;
@@ -60,6 +63,9 @@ module ibex_vector_unit #(
       req_rd_q      <= '0;
       is_vsetvli_q  <= 1'b0;
       is_vle8_q     <= 1'b0;
+      // reset CSR regs
+      vl_q         <= '0;
+      sew_q        <= '0;
     end
     else  begin       
       state_q <= state_d;
@@ -68,6 +74,9 @@ module ibex_vector_unit #(
       req_rd_q      <= req_rd_d;
       is_vsetvli_q  <= is_vsetvli_d;
       is_vle8_q     <= is_vle8_d;
+      // update CSR regs
+      vl_q         <= vl_d;
+      sew_q        <= sew_d;
     end
   end
 
@@ -81,11 +90,16 @@ module ibex_vector_unit #(
     req_rs1_d    = req_rs1_q;
     req_rd_d     = req_rd_q;
 
-    // Proxy decode (for now). Example:
-    // opcode=0x0B; funct7=0x01; funct3=000 -> vsetvli proxy
-    // funct3=001 -> vle8 proxy
+  // Proxy decode (for now). Example:
+  // opcode=0x0B; funct7=0x01; funct3=000 -> vsetvli proxy
+  // funct3=001 -> vle8 proxy
     is_vsetvli_d = is_vsetvli_q;
-    is_vle8_d = is_vle8_q;
+  is_vle8_d = is_vle8_q;
+
+  // Defaults for next-state regs and LSU start pulse
+  vl_d        = vl_q;
+  sew_d       = sew_q;
+  lsu_start   = 1'b0;
 
     case (state_q)
       IDLE: begin
@@ -106,6 +120,10 @@ module ibex_vector_unit #(
           is_vle8_d    = (v_req_i.insn[6:0]  == 7'h0B) &&
                           (v_req_i.insn[31:25]== 7'h01) &&
                           (v_req_i.insn[14:12]== 3'b001);
+        end else begin
+          // no new request: clear decode flags
+          is_vsetvli_d = 1'b0;
+          is_vle8_d    = 1'b0;
         end
       end
 
@@ -132,15 +150,15 @@ module ibex_vector_unit #(
           avl    = req_rs1_q;
 
           case (sew_sel)
-            2'b00: sew_q = 2'd0; // SEW=8
-            2'b01: sew_q = 2'd1; // SEW=16
-            default: sew_q = 2'd0;
+            2'b00: sew_d = 2'd0; // SEW=8
+            2'b01: sew_d = 2'd1; // SEW=16
+            default: sew_d = 2'd0;
           endcase
 
           // compute max elements per vreg
-          max_elems = (sew_q==0) ? 16 : 8;
+          max_elems = (sew_d==0) ? 16 : 8;
 
-          vl_q = (avl < max_elems) ? avl[4:0] : max_elems;
+          vl_d = (avl < max_elems) ? avl[4:0] : max_elems;
 
           state_d = WRITEBK;
         end
@@ -163,6 +181,10 @@ module ibex_vector_unit #(
         if (is_vsetvli_q) begin
           v_resp_o.rd_we    = (req_rd_q != 0);
           v_resp_o.rd_wdata = {27'd0, vl_q}; // return VL in rd
+        end else begin
+          // VLE8 does not write back to scalar rd in this cut
+          v_resp_o.rd_we    = 1'b0;
+          v_resp_o.rd_wdata = 32'd0;
         end
         state_d = IDLE;
       end
@@ -225,8 +247,9 @@ module ibex_vector_unit #(
   // assign base_q = base_i; this are for lsuv module
   // assign vd_idx_q = vd_idx_i;
 
-  assign base_q = req_rs1_d;
-  assign vd_idx_q = req_rd_d;
+  // Use latched request values to derive base/index
+  assign base_q = req_rs1_q;
+  assign vd_idx_q = req_rd_q;
 
   assign vrf_wr_vreg  = vd_idx_q; // destination vreg, we don't need to change it in the combinatorial logic
   assign vrf_wr_bank  = idx_q[3:2];  // 4 lanes per bank when SEW=8
@@ -257,7 +280,10 @@ module ibex_vector_unit #(
     // vrf_wr_bank 
 
     unique case (lsu_q)
-      LSU_IDLE:  if (lsu_start) lsu_d = LSU_SETUP;
+      LSU_IDLE:  if (lsu_start) begin
+        lsu_d = LSU_SETUP;
+        idx_d = '0;
+      end
 
       LSU_SETUP: begin
         // Preconditions for this first cut (assert in TB):
