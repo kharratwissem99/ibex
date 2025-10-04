@@ -59,15 +59,16 @@ module ibex_vector_unit_tb;
     .v_req_i           (v_req),
     .v_resp_o          (v_resp),
 
-    .mem_req_valid_o   (mem_req_valid),
-    .mem_req_ready_i   (mem_req_ready),
-    .mem_req_addr_o    (mem_req_addr),
-    .mem_req_write_o   (mem_req_write),
-    .mem_req_wdata_o   (mem_req_wdata),
-    .mem_req_wstrb_o   (mem_req_wstrb),
-    .mem_resp_valid_i  (mem_resp_valid),
-    .mem_resp_rdata_i  (mem_resp_rdata),
-    .mem_resp_err_i    (mem_resp_err)
+    .data_req_o(mem_req_valid),
+    .data_addr_o(mem_req_addr),
+    .data_we_o(mem_req_write),
+    .data_be_o(mem_req_wstrb),
+    .data_wdata_o(mem_req_wdata),
+
+    .data_gnt_i(mem_req_ready),
+    .data_rvalid_i(mem_resp_valid),
+    .data_err_i(mem_resp_err),
+    .data_rdata_i(mem_resp_rdata)
   );
 
   // -----------------------------

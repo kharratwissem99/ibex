@@ -13,19 +13,20 @@ module ibex_vector_unit #(
 
   output logic                     v_req_ready_o,
   output ibex_pkg::v_resp_t        v_resp_o,
+
   // 32-bit memory interface
-  output logic                     mem_req_valid_o, // data_req_o
-  input  logic                     mem_req_ready_i, // data_gnt_i
-  output logic [31:0]              mem_req_addr_o, // data_addr_o
-  output logic                     mem_req_write_o, // data_we_o
-  output logic [31:0]              mem_req_wdata_o, // data_wdata_o
-  output logic [3:0]               mem_req_wstrb_o, // data_be_o
-  input  logic                     mem_resp_valid_i, // data_rvalid_i
-  input  logic [31:0]              mem_resp_rdata_i, // data_rdata_i
-  input  logic                     mem_resp_err_i // data_err_i
+  output logic                     data_req_o, // data_req_o
+  output logic [31:0]              data_addr_o, // data_addr_o
+  output logic                     data_we_o, // data_we_o
+  output logic [3:0]               data_be_o, // data_be_o
+  output logic [31:0]              data_wdata_o, // data_wdata_o
+
+  input  logic                     data_gnt_i, // data_gnt_i
+  input  logic                     data_rvalid_i, // data_rvalid_i
+  input  logic                     data_err_i, // data_err_i
+  input  logic [31:0]              data_rdata_i // data_rdata_i
 );
 
-  // ---- Latched request ----
   logic [31:0]  req_insn_q, req_insn_d;
   logic [31:0]  req_rs1_q, req_rs1_d;
   logic  [4:0]  req_rd_q, req_rd_d;
@@ -47,6 +48,28 @@ module ibex_vector_unit #(
 
   logic [4:0] max_elems;
 
+  logic lsu_start;
+  logic lsu_done;
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      state_q <= IDLE;
+      req_insn_q    <= '0;
+      req_rs1_q     <= '0;
+      req_rd_q      <= '0;
+      is_vsetvli_q  <= 1'b0;
+      is_vle8_q     <= 1'b0;
+    end
+    else  begin       
+      state_q <= state_d;
+      req_insn_q    <= req_insn_d;
+      req_rs1_q     <= req_rs1_d;
+      req_rd_q      <= req_rd_d;
+      is_vsetvli_q  <= is_vsetvli_d;
+      is_vle8_q     <= is_vle8_d;
+    end
+  end
+
   // next-state logic
   always_comb begin
     state_d     = state_q;
@@ -62,24 +85,6 @@ module ibex_vector_unit #(
     // funct3=001 -> vle8 proxy
     is_vsetvli_d = is_vsetvli_q;
     is_vle8_d = is_vle8_q;
-
-    // we will talk to memory:
-    mem_req_valid_o = 1'b0;
-    mem_req_addr_o  = '0;
-    mem_req_write_o = 1'b0;
-    mem_req_wdata_o = '0;
-    mem_req_wstrb_o = 4'b0000;
-
-    // we will talk to register file:
-    vrf_wr_en    = 1'b0;
-    vrf_wr_vreg  = '0;
-    vrf_wr_bank  = '0;
-    vrf_wr_wdata = '0;
-    vrf_wr_wstrb = 4'b0000;
-
-    vrf_rd_en    = 1'b0;
-    vrf_rd_vreg  = '0;
-    vrf_rd_bank  = '0;
 
     case (state_q)
       IDLE: begin
@@ -179,25 +184,6 @@ module ibex_vector_unit #(
     endcase
   end
 
-  always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-      state_q <= IDLE;
-      req_insn_q    <= '0;
-      req_rs1_q     <= '0;
-      req_rd_q      <= '0;
-      is_vsetvli_q  <= 1'b0;
-      is_vle8_q     <= 1'b0;
-    end
-    else  begin       
-      state_q <= state_d;
-      req_insn_q    <= req_insn_d;
-      req_rs1_q     <= req_rs1_d;
-      req_rd_q      <= req_rd_d;
-      is_vsetvli_q  <= is_vsetvli_d;
-      is_vle8_q     <= is_vle8_d;
-    end
-  end
-
   // ---- VRF write/read wires ----
   logic        vrf_wr_en;
   logic  [4:0] vrf_wr_vreg;
@@ -227,69 +213,5 @@ module ibex_vector_unit #(
     .vrf_peek_idx_i (vd_idx_q)
   `endif
   );
-
-  always_comb begin
-    lsu_d = lsu_q;
-    lsu_done = 1'b0;
-
-    // default mem/vrf (also set in control FSM)
-    // mem_req_* already defaulted to zero above
-
-    case (lsu_q)
-      LSU_IDLE: begin
-        if (lsu_start) lsu_d = LSU_SETUP;
-      end
-
-      LSU_SETUP: begin
-        // aligned only for now:
-        // assert preconditions in TB: (base_q[1:0]==0) and (vl_q%4==0)
-        idx_d = 5'd0;
-        lsu_d = (vl_q == 0) ? LSU_DONE : LSU_REQ;
-      end
-
-      LSU_REQ: begin
-        mem_req_valid_o = 1'b1; // data_req_o signal
-        mem_req_addr_o  = base_q + idx_q;     // EEW=1 byte, 4 bytes per beat todo: FROM WHERE COMES base_q?
-        mem_req_write_o = 1'b0;
-        // where is the write enable signal? should be 0 for load todo
-        if (mem_req_ready_i) lsu_d = LSU_WAIT; // by mem_req_ready_i is meant gnt
-        //TODO: we don't need to move to wait here, we can send a second request, but for now just keeping it simple 
-      end
-
-      LSU_WAIT: begin
-        if (mem_resp_valid_i) begin
-          write full word to VRF bank
-          vrf_wr_en    = 1'b1;
-          vrf_wr_vreg  = vd_idx_q; // from where comes vd_idx_q?
-          vrf_wr_bank  = bank_sel; // from where comes bank_sel?
-          vrf_wr_wdata = mem_resp_rdata_i;
-          vrf_wr_wstrb = 4'b1111;
-          lsu_d        = LSU_WRITE;
-        end
-      end
-
-      LSU_WRITE: begin
-        if (idx_q + 5'd4 >= vl_q) lsu_d = LSU_DONE;
-        else                      lsu_d = LSU_REQ;
-      end
-
-      LSU_DONE: begin
-        lsu_done = 1'b1;
-        lsu_d    = LSU_IDLE;
-      end
-    endcase
-  end
-
-  // State & index regs
-  always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-      lsu_q  <= LSU_IDLE;
-      idx_q  <= '0;
-    end else begin
-      lsu_q  <= lsu_d;
-      if (lsu_q == LSU_SETUP)           idx_q <= 5'd0;
-      else if (lsu_q == LSU_WRITE)      idx_q <= idx_q + 5'd4;
-    end
-  end
 
 endmodule
