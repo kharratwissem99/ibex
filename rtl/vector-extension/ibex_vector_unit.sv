@@ -33,7 +33,8 @@ module ibex_vector_unit #(
 
   logic         is_vsetvli_q, is_vsetvli_d;
   logic         is_vle8_q, is_vle8_d;
-  // (later: is_vse8_q, is_vle16_q, ...)
+  logic         is_vse8_q, is_vse8_d;
+  // (later: is_vle16_q, is_vse16_q ...)
 
   // inside ibex_vector_unit.sv
   typedef enum logic [2:0] {IDLE, DECODE, EXECUTE, WRITEBK, TRAP} vstate_e;
@@ -74,6 +75,7 @@ module ibex_vector_unit #(
       req_rd_q      <= '0;
       is_vsetvli_q  <= 1'b0;
       is_vle8_q     <= 1'b0;
+      is_vse8_q     <= 1'b0;
       // reset CSR regs
       vl_q         <= '0;
       sew_q        <= '0;
@@ -85,6 +87,7 @@ module ibex_vector_unit #(
       req_rd_q      <= req_rd_d;
       is_vsetvli_q  <= is_vsetvli_d;
       is_vle8_q     <= is_vle8_d;
+      is_vse8_q     <= is_vse8_d;
       // update CSR regs
       vl_q         <= vl_d;
       sew_q        <= sew_d;
@@ -104,8 +107,9 @@ module ibex_vector_unit #(
   // Proxy decode (for now). Example:
   // opcode=0x0B; funct7=0x01; funct3=000 -> vsetvli proxy
   // funct3=001 -> vle8 proxy
-    is_vsetvli_d = is_vsetvli_q;
+  is_vsetvli_d = is_vsetvli_q;
   is_vle8_d = is_vle8_q;
+  is_vse8_d = is_vse8_q;
 
   // Defaults for next-state regs and LSU start pulse
   vl_d        = vl_q;
@@ -131,10 +135,15 @@ module ibex_vector_unit #(
           is_vle8_d    = (v_req_i.insn[6:0]  == 7'h0B) &&
                           (v_req_i.insn[31:25]== 7'h01) &&
                           (v_req_i.insn[14:12]== 3'b001);
+
+          is_vse8_d    = (v_req_i.insn[6:0]  == 7'h0B) &&
+                          (v_req_i.insn[31:25]== 7'h01) &&
+                          (v_req_i.insn[14:12]== 3'b010);
         end else begin
           // no new request: clear decode flags
           is_vsetvli_d = 1'b0;
           is_vle8_d    = 1'b0;
+          is_vse8_d    = 1'b0;
         end
       end
 
@@ -145,6 +154,7 @@ module ibex_vector_unit #(
         // state_d = EXECUTE; # old
         if (is_vsetvli_q) state_d = EXECUTE;        // one-cycle op
         else if (is_vle8_q) state_d = EXECUTE;      // will kick LSU micro-FSM
+        else if (is_vse8_q) state_d = EXECUTE;
         else begin
           // unsupported -> trap
           // v_resp_o.done = 1'b1;
@@ -173,7 +183,7 @@ module ibex_vector_unit #(
 
           state_d = WRITEBK;
         end
-        else if (is_vle8_q && (sew_q == 2'd0)) begin
+        else if ((is_vle8_q || is_vse8_q) && (sew_q == 2'd0)) begin
           // ---- kick LSU micro-FSM ----
           // set up starting indices, base, dest vreg, etc.
           // (do not emit v_resp here; LSU will assert done when finished)
@@ -195,7 +205,7 @@ module ibex_vector_unit #(
           v_resp_o.rd_we    = (req_rd_q != 0);
           v_resp_o.rd_wdata = {27'd0, vl_q}; // return VL in rd
         end else begin
-          // VLE8 does not write back to scalar rd in this cut
+          // VLE8 and SLE8 does not write back to scalar rd in this cut
           v_resp_o.rd_we    = 1'b0;
           v_resp_o.rd_wdata = 32'd0;
         end
