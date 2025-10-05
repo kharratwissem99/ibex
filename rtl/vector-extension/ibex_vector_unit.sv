@@ -39,6 +39,17 @@ module ibex_vector_unit #(
   typedef enum logic [2:0] {IDLE, DECODE, EXECUTE, WRITEBK, TRAP} vstate_e;
   vstate_e state_q, state_d;
 
+  // ---- LSU / VRF state ----
+  typedef enum logic [3:0] {
+    LSU_IDLE, LSU_SETUP,
+    LSU_REQ1, LSU_WAIT1,
+    LSU_REQ2, LSU_WAIT2,
+    LSU_ALIGN,
+    LSU_WRITE,
+    LSU_DONE, LSU_FAULT
+  } lsu_state_e;
+  lsu_state_e lsu_q, lsu_d;
+
   // simple CSR regs
   logic [4:0] vl_q;      // up to 16 (for SEW=8) or 8 (for SEW=16)
   logic [1:0] sew_q;     // 0=8b, 1=16b
@@ -259,17 +270,6 @@ module ibex_vector_unit #(
   // assign vrf_wr_vreg  = vd_idx_q; // destination vreg, we don't need to change it in the combinatorial logic
   // assign vrf_wr_bank  = idx_q[3:2];  // 4 lanes per bank when SEW=8
 
-  // ---- LSU / VRF state ----
-  typedef enum logic [3:0] {
-    LSU_IDLE, LSU_SETUP,
-    LSU_REQ1, LSU_WAIT1,
-    LSU_REQ2, LSU_WAIT2,
-    LSU_ALIGN,
-    LSU_WRITE, LSU_WRITE2,
-    LSU_DONE, LSU_FAULT
-  } lsu_state_e;
-  lsu_state_e lsu_q, lsu_d;
-
   logic [31:0] addr, a0_aligned, a1_aligned;
   logic [1:0]  sh;                    // byte offset within 32b word
   logic        misaligned;
@@ -279,6 +279,19 @@ module ibex_vector_unit #(
   assign misaligned = (sh != 2'b00);
   assign a0_aligned = {addr[31:2], 2'b00}; // aligned down
   assign a1_aligned = a0_aligned + 32'd4; // aligned up
+
+  // helpers
+  logic [2:0] bytes_left       = (vl_q > idx_q) ? (vl_q - idx_q) : 3'd0;
+  logic [2:0] bytes_from_read  = (bytes_left > 3'd4) ? 3'd4 : bytes_left; // 1..4 (last can be 1..3)
+
+  // mask for tail (idx_mod is always 0 here)
+  logic [3:0] mask =
+    (bytes_from_read == 3'd4) ? 4'b1111 :
+    (bytes_from_read == 3'd3) ? 4'b0111 :
+    (bytes_from_read == 3'd2) ? 4'b0011 :
+    (bytes_from_read == 3'd1) ? 4'b0001 : 4'b0000;
+
+  logic [63:0] merged = {beat2_q, beat1_q};
 
   always_comb begin
     // defaults
@@ -306,30 +319,17 @@ module ibex_vector_unit #(
     vrf_wr_vreg  = vd_idx_q;
     vrf_wr_bank  = idx_q[3:2];
 
-    // Precompute some helpers (SEW=8 path)
-    logic [1:0] idx_mod;                 // position within VRF bank word
-    logic [2:0] bytes_left;              // how many elements remain
-    logic [2:0] bytes_from_read;         // this beat moves up to 4 bytes
-    logic [2:0] first_bytes;             // bytes written into current bank
-    logic [2:0] second_bytes;            // spill bytes into next bank
-    logic [31:0] wdata1, wdata2;
-    logic [3:0]  mask1, mask2;
+    // helpers
+    // logic [2:0] bytes_left       = (vl_q > idx_q) ? (vl_q - idx_q) : 3'd0;
+    // logic [2:0] bytes_from_read  = (bytes_left > 3'd4) ? 3'd4 : bytes_left; // 1..4 (last can be 1..3)
 
-    idx_mod        = idx_q[1:0];
-    bytes_left     = (vl_q > idx_q) ? (vl_q - idx_q) : 3'd0;
-    bytes_from_read= (bytes_left > 3'd4) ? 3'd4 : bytes_left;
-    // total bytes we want this beat limited by bank boundary inside the VRF word
-    logic [2:0] space_in_bank = 3'd4 - {1'b0, idx_mod};
-    first_bytes    = (space_in_bank < bytes_from_read) ? space_in_bank : bytes_from_read;
-    second_bytes   = bytes_from_read - first_bytes;
+    // // mask for tail (idx_mod is always 0 here)
+    // logic [3:0] mask =
+    //   (bytes_from_read == 3'd4) ? 4'b1111 :
+    //   (bytes_from_read == 3'd3) ? 4'b0111 :
+    //   (bytes_from_read == 3'd2) ? 4'b0011 :
+    //   (bytes_from_read == 3'd1) ? 4'b0001 : 4'b0000;
 
-    // shift/pack for VRF write(s) from the assembled 32b 'word_q'
-    wdata1 = word_q << (8*idx_mod);
-    mask1  = (first_bytes == 0) ? 4'b0000
-                                : ((4'b1111 >> (4 - first_bytes)) << idx_mod);
-    wdata2 = word_q >> (8*first_bytes);
-    mask2  = (second_bytes == 0) ? 4'b0000
-                                : (4'b1111 >> (4 - second_bytes));
 
     unique case (lsu_q)
       LSU_IDLE:  if (lsu_start) begin
@@ -340,7 +340,7 @@ module ibex_vector_unit #(
       LSU_SETUP: begin
         // Preconditions for this first cut (assert in TB):
         // base_q[1:0] == 2'b00  &&  (vl_q % 4 == 0)
-        lsu_d = (vl_q == 0) ? LSU_DONE : LSU_REQ;
+        lsu_d = (vl_q == 0) ? LSU_DONE : LSU_REQ1;
       end
 
       // ----- First aligned read (always) -----
@@ -350,14 +350,6 @@ module ibex_vector_unit #(
         data_we_o   = 1'b0;
         if (data_req_o && data_gnt_i) lsu_d = LSU_WAIT1;
       end
-
-      // LSU_REQ: begin
-      //   data_req_o = 1'b1;
-      //   data_addr_o  = base_q + idx_q;   // EEW=1 byte, 4 bytes per beat
-      //   data_we_o = 1'b0;             // load
-      //   // wstrb=0000 on loads
-      //   if (data_gnt_i) lsu_d = LSU_WAIT;
-      // end
 
       LSU_WAIT1: begin
         if (data_rvalid_i) begin
@@ -391,7 +383,7 @@ module ibex_vector_unit #(
       LSU_ALIGN: begin
         if (misaligned) begin
           // 64-bit merge: [beat2][beat1], then pick 4 bytes starting at 'sh'
-          logic [63:0] merged = {beat2_q, beat1_q};
+          // logic [63:0] merged = {beat2_q, beat1_q};
           word_d = merged >> (sh * 8);
         end else begin
           word_d = beat1_q;
@@ -399,69 +391,16 @@ module ibex_vector_unit #(
         lsu_d = LSU_WRITE;
       end
 
-      // LSU_WAIT: begin
-      //   if (data_rvalid_i) begin
-      //     if (data_err_i) begin
-      //       // lsu_fault = 1'b1;
-      //       lsu_d     = LSU_FAULT;
-      //     end else begin
-      //       // vrf_wr_en    = 1'b1;
-      //       // vrf_wr_wstrb = 4'b1111;         // aligned full word
-      //       lsu_d        = LSU_WRITE;
-      //     end
-      //   end
-      // end
-
-      // LSU_WRITE: begin
-      //   // advance by 4 lanes (one 32b bank)
-      //   vrf_wr_en    = 1'b1;
-      //   vrf_wr_wstrb = 4'b1111;         // aligned full word
-      //   if (idx_q + 5'd4 >= vl_q) begin // potensial overflow. todo check
-      //     lsu_d = LSU_DONE;
-      //   end else begin
-      //     lsu_d = LSU_REQ;
-      //     idx_d = idx_q + 5'd4;
-      //   end
-      // end
-
-      // LSU_WRITE: begin
-      //   // advance by 4 lanes (one 32b bank)
-      //   vrf_wr_en    = 1'b1;
-      //   vrf_wr_wdata = word_q;
-      //   vrf_wr_wstrb = 4'b1111;         // aligned full word
-      //   if (idx_q + 5'd4 >= vl_q) begin // potensial overflow. todo check
-      //     lsu_d = LSU_DONE;
-      //   end else begin
-      //     lsu_d = LSU_REQ1;
-      //     idx_d = idx_q + 5'd4;
-      //   end
-      // end
-
-      // todo: implement LSU_WRITE and LSU_WRITE2 for misaligned case
-      // ----- VRF write into current bank (and possibly split) -----
       LSU_WRITE: begin
-        if (first_bytes != 0) begin
-          vrf_wr_en    = 1'b1;
-          vrf_wr_bank  = idx_q[3:2];
-          vrf_wr_wdata = wdata1;
-          vrf_wr_wstrb = mask1;
-        end
-        if (second_bytes != 0) begin
-          lsu_d = LSU_WRITE2;                 // spill next cycle
-        end else begin
-          idx_d = idx_q + bytes_from_read[4:0];
-          lsu_d = (idx_d >= vl_q) ? LSU_DONE : LSU_REQ1;
-        end
-      end
+        // current VRF bank = idx_q[3:2]; idx_mod==0 -> no shift needed
+        vrf_wr_en    = (bytes_from_read != 0);
+        vrf_wr_vreg  = vd_idx_q;
+        vrf_wr_bank  = idx_q[3:2];
+        vrf_wr_wdata = word_q;     // already the right 4-byte window, aligned to byte 0
+        vrf_wr_wstrb = mask;       // only low N bytes if tail
 
-      // ----- Spill into next bank (only if needed) -----
-      LSU_WRITE2: begin
-        vrf_wr_en    = 1'b1;
-        vrf_wr_bank  = (idx_q[3:2] + 2'd1);
-        vrf_wr_wdata = wdata2;
-        vrf_wr_wstrb = mask2;
-
-        idx_d = idx_q + bytes_from_read[4:0];
+        // advance or finish
+        idx_d = idx_q + bytes_from_read;  // (3-bit -> zero-extends fine)
         lsu_d = (idx_d >= vl_q) ? LSU_DONE : LSU_REQ1;
       end
 
