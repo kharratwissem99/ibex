@@ -183,7 +183,7 @@ module ibex_vector_unit #(
 
           state_d = WRITEBK;
         end
-        else if ((is_vle8_q || is_vse8_q) && (sew_q == 2'd0)) begin
+        else if ((is_vle8_q) && (sew_q == 2'd0)) begin
           // ---- kick LSU micro-FSM ----
           // set up starting indices, base, dest vreg, etc.
           // (do not emit v_resp here; LSU will assert done when finished)
@@ -193,6 +193,15 @@ module ibex_vector_unit #(
           // state_d      = EXECUTE;   // stay here until LSU_finished
           if (lsu_done) state_d = WRITEBK;
         end
+        else if (is_vse8_q && (sew_q == 2'd0)) begin
+          st_start = (st_q == ST_IDLE);       // one-cycle pulse to start
+          if (st_done) state_d = WRITEBK;     // scalar WB usually none; just signal done
+          if (st_fault) begin
+            v_resp_o.trap = 1'b1;
+            state_d = WRITEBK;
+          end
+        end
+
       end
 
       WRITEBK: begin
