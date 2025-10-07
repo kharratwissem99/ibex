@@ -264,7 +264,7 @@ module ibex_vector_unit #(
   logic [4:0] vd_idx_q;
   // ---- LSU micro-FSM ----
   // will be later moved to a load store unit module
-  logic  [4:0] idx_q, idx_d;      // 0..15 (element index)
+  logic  [4:0] idx_q, idx_d;      // 0..15 (element index) for SEW=8, wenn SEW=16 dann 0..7
   logic [31:0] beat1_q, beat1_d;      // first aligned word
   logic [31:0] beat2_q, beat2_d;      // second aligned word (for misaligned)
   logic [31:0] word_q,  word_d;       // final 32b window for this beat
@@ -284,7 +284,7 @@ module ibex_vector_unit #(
   logic [1:0]  sh;                    // byte offset within 32b word
   logic        misaligned;
 
-  assign addr       = base_q + idx_q; // current byte address after incremention
+  assign addr       = base_q + 2 * idx_q; // current byte address after incremention // 
   assign sh         = addr[1:0];
   assign misaligned = (sh != 2'b00);
   assign a0_aligned = {addr[31:2], 2'b00}; // aligned down
@@ -515,7 +515,7 @@ module ibex_vector_unit #(
     //logic [3:0]  full_at_sh = (4'b1111 << sh_l); // wir verschieben und erstellen die erste Mask
     // low N bytes at starting pos sh
     //logic [3:0]  lowN_at_sh = (N_l==3'd4) ? full_at_sh
-                            : ((4'b1111 >> (4 - N_l)) << sh_l);
+    //                        : ((4'b1111 >> (4 - N_l)) << sh_l);
     // mask first bytes only (if two-beat)
     //logic [3:0]  first_mask = (first==3'd4) ? full_at_sh
     //                        : ((4'b1111 >> (4 - first)) << sh_l);
