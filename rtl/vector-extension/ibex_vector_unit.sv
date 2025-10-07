@@ -444,4 +444,185 @@ module ibex_vector_unit #(
     end
   end
 
+  // Store LSU
+  typedef enum logic [3:0] {
+    ST_IDLE, ST_SETUP,
+    ST_VRF_RD, ST_VRF_LATCH,
+    ST_REQ1, ST_WAIT1,
+    ST_REQ2, ST_WAIT2,
+    ST_DONE, ST_FAULT
+  } st_state_e;
+
+  st_state_e st_q, st_d;
+
+  //logic [31:0] base_q;              // req_rs1_q (latched earlier)
+  //logic  [4:0] vs_idx_q;            // source vreg index (use rd field in your proxy scheme)
+  //logic  [4:0] idx_q, idx_d;        // byte element index 0..15
+  //todo: many signals were redefined here, should be shared with load LSU
+  logic [31:0] bank_word_q, bank_word_d;  // 32-bit from VRF bank
+  logic [31:0] w0_data, w1_data;    // store beats' data
+  logic  [3:0] w0_strb, w1_strb;    // store beats' byte-enables
+  //logic [31:0] a0_aligned, a1_aligned;
+  //logic [31:0] addr;                // base_q + idx_q
+  //logic [1:0]  sh;                  // addr[1:0]
+  //logic [2:0]  bytes_left;          // vl-idx (clamped)
+  //logic [2:0]  N;                   // bytes to store this beat = min(4, bytes_left)
+  logic        need_two;            // second write needed?
+  logic        st_start;            // pulse from control FSM to start vse8
+  logic        st_done, st_fault;   // back to control FSM
+
+  // VRF connections for store
+  assign vrf_rd_vreg = vs_idx_q;
+  assign vrf_rd_bank = idx_q[3:2];
+
+  //assign bytes_left = (vl_q > idx_q) ? (vl_q - idx_q) : 3'd0;
+  //assign N          = (bytes_left > 3'd4) ? 3'd4 : bytes_left; // same as bytes from read
+
+  // 1 or 2 stores this beat?
+  assign need_two   = (sh != 2'd0) && ((sh + N) > 3'd4); // wir brauchen zwei beats wenn die verschiebung and der anzahl der gebleiebenen Bytes größer als 4 ist.
+
+  always_comb begin
+    st_d          = st_q;
+    idx_d         = idx_q;
+    bank_word_d   = bank_word_q;
+
+    // defaults: memory
+    data_req_o    = 1'b0;
+    data_addr_o   = '0;
+    data_we_o     = 1'b0;
+    data_wdata_o  = '0;
+    data_be_o     = 4'b0000;
+
+    // defaults: VRF read
+    vrf_rd_en     = 1'b0;
+
+    // status
+    st_done       = 1'b0;
+    st_fault      = 1'b0;
+
+    // precompute masks/data for current beat (from bank_word_q)
+    logic [1:0]  sh_l = sh;
+    logic [2:0]  N_l  = N;
+    logic [2:0]  first = need_two ? (3'd4 - {1'b0,sh_l}) : N_l;
+    logic [2:0]  second= need_two ? (N_l - first)         : 3'd0;
+
+    // one-beat packet (or first of two)
+    logic [31:0] w0_data_l = bank_word_q << (8*sh_l);
+    logic [3:0]  w0_strb_l;
+
+  
+    // full 4-byte mask << sh
+    //logic [3:0]  full_at_sh = (4'b1111 << sh_l); // wir verschieben und erstellen die erste Mask
+    // low N bytes at starting pos sh
+    //logic [3:0]  lowN_at_sh = (N_l==3'd4) ? full_at_sh
+                            : ((4'b1111 >> (4 - N_l)) << sh_l);
+    // mask first bytes only (if two-beat)
+    //logic [3:0]  first_mask = (first==3'd4) ? full_at_sh
+    //                        : ((4'b1111 >> (4 - first)) << sh_l);
+    //assign w0_strb_l = need_two ? first_mask : lowN_at_sh;
+
+    // kann dadurch vereinfacht werden zu (todo: verify):
+    assign w0_strb_l = (first==3'd4) ? 4'b1111
+                            : ((4'b1111 >> (4 - first)) << sh_l);
+
+    // second-beat packet (if needed)
+    logic [31:0] w1_data_l = bank_word_q >> (8*first);
+    logic [3:0]  w1_strb_l = (second==3'd0) ? 4'b0000
+                          : (4'b1111 >> (4 - second));
+
+    unique case (st_q)
+      ST_IDLE: begin
+        if (st_start) begin
+          idx_d = '0;
+          st_d  = ST_SETUP;
+        end
+      end
+
+      ST_SETUP: begin
+        // assert: SEW=8, vl_q ≤ 16
+        st_d = (vl_q == 0) ? ST_DONE : ST_VRF_RD;
+      end
+
+      // read VRF bank word
+      ST_VRF_RD: begin
+        vrf_rd_en   = 1'b1;
+        // your VRF returns data REGISTERED next cycle → go latch
+        st_d        = ST_VRF_LATCH;
+      end
+
+      ST_VRF_LATCH: begin
+        bank_word_d = vrf_rd_rdata;        // capture VRF word
+        st_d        = ST_REQ1;
+      end
+
+      // first memory write
+      ST_REQ1: begin
+        data_req_o   = 1'b1;
+        data_addr_o  = a0_aligned;
+        data_we_o    = 1'b1;
+        data_wdata_o = w0_data_l;
+        data_be_o    = w0_strb_l;
+        if (data_req_o && data_gnt_i) st_d = ST_WAIT1;
+      end
+
+      ST_WAIT1: begin
+        // if your memory returns store responses, wait for rvalid_i
+        if (data_rvalid_i) begin
+          if (data_err_i) st_d = ST_FAULT;
+          else            st_d = need_two ? ST_REQ2 : ST_DONE;
+        end
+        // if not, you can shortcut: st_d = need_two ? ST_REQ2 : ST_DONE;
+      end
+
+      // optional second write
+      ST_REQ2: begin
+        data_req_o   = 1'b1;
+        data_addr_o  = a1_aligned;
+        data_we_o    = 1'b1;
+        data_wdata_o = w1_data_l;
+        data_be_o    = w1_strb_l;
+        if (data_req_o && data_gnt_i) st_d = ST_WAIT2;
+      end
+
+      ST_WAIT2: begin
+        if (data_rvalid_i) begin
+          if (data_err_i) st_d = ST_FAULT;
+          else begin           
+            //st_d = ST_DONE;
+            idx_d = idx_q + N;                  // zero-extends fine
+            st_d  = (idx_d >= vl_q) ? ST_DONE : ST_VRF_RD;
+          end
+        end
+        // (same note as WAIT1 if your memory has no store response)
+      end
+
+      ST_DONE: begin
+        // advance to next chunk or finish instruction
+        //idx_d = idx_q + N;                  // zero-extends fine
+        //st_d  = (idx_d >= vl_q) ? ST_IDLE : ST_VRF_RD;
+        //if (idx_d >= vl_q) st_done = 1'b1;  // signal control FSM
+        st_done = 1'b1;  // signal control FSM
+        st_d    = ST_IDLE;
+      end
+
+      ST_FAULT: begin
+        st_fault = 1'b1;
+        st_done  = 1'b1;
+        st_d     = ST_IDLE;
+      end
+    endcase
+  end
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      st_q         <= ST_IDLE;
+      idx_q        <= '0;
+      bank_word_q  <= '0;
+    end else begin
+      st_q         <= st_d;
+      idx_q        <= idx_d;
+      bank_word_q  <= bank_word_d;
+    end
+  end
+
 endmodule
