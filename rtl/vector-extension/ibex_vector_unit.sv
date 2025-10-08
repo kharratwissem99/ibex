@@ -363,7 +363,7 @@ module ibex_vector_unit #(
     unique case (lsu_q)
       LSU_IDLE:  if (lsu_start) begin
         lsu_d = LSU_SETUP;
-        idx_d = '0;
+        idx_d = '0; // wichtig
       end
 
       LSU_SETUP: begin
@@ -506,13 +506,14 @@ module ibex_vector_unit #(
 
   // VRF connections for store
   assign vrf_rd_vreg = vs_idx_q;
-  assign vrf_rd_bank = idx_q[3:2];
+  assign vrf_rd_bank = byte_idx[3:2];
 
   //assign bytes_left = (vl_q > idx_q) ? (vl_q - idx_q) : 3'd0;
   //assign N          = (bytes_left > 3'd4) ? 3'd4 : bytes_left; // same as bytes from read
 
   // 1 or 2 stores this beat?
-  assign need_two   = (sh != 2'd0) && ((sh + N) > 3'd4); // wir brauchen zwei beats wenn die verschiebung and der anzahl der gebleiebenen Bytes größer als 4 ist.
+  logic [2:0]  Nbytes      = elems_beat * EEW_BYTES;         // 1..4 (8b: 4/3/2/1; 16b: 4/2)
+  assign need_two   = (sh != 2'd0) && ((sh + Nbytes) > 3'd4); // wir brauchen zwei beats wenn die verschiebung and der anzahl der gebleiebenen Bytes größer als 4 ist.
 
   always_comb begin
     st_d          = st_q;
@@ -535,9 +536,9 @@ module ibex_vector_unit #(
 
     // precompute masks/data for current beat (from bank_word_q)
     logic [1:0]  sh_l = sh;
-    logic [2:0]  N_l  = N;
-    logic [2:0]  first = need_two ? (3'd4 - {1'b0,sh_l}) : N_l;
-    logic [2:0]  second= need_two ? (N_l - first)         : 3'd0;
+    logic [2:0]  N_l  = elems_beat;
+    logic [2:0]  first = need_two ? (3'd4 - {1'b0,sh_l}) : Nbytes;
+    logic [2:0]  second= need_two ? (Nbytes - first)         : 3'd0;
 
     // one-beat packet (or first of two)
     logic [31:0] w0_data_l = bank_word_q << (8*sh_l);
@@ -566,7 +567,7 @@ module ibex_vector_unit #(
     unique case (st_q)
       ST_IDLE: begin
         if (st_start) begin
-          idx_d = '0;
+          idx_d = '0; // wichtig
           st_d  = ST_SETUP;
         end
       end
@@ -622,7 +623,7 @@ module ibex_vector_unit #(
           if (data_err_i) st_d = ST_FAULT;
           else begin           
             //st_d = ST_DONE;
-            idx_d = idx_q + N;                  // zero-extends fine
+            idx_d = idx_q + elems_beat;                  // zero-extends fine
             st_d  = (idx_d >= vl_q) ? ST_DONE : ST_VRF_RD;
           end
         end
@@ -649,11 +650,11 @@ module ibex_vector_unit #(
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       st_q         <= ST_IDLE;
-      idx_q        <= '0;
+      //idx_q        <= '0; // already zeroed see the reset above
       bank_word_q  <= '0;
     end else begin
       st_q         <= st_d;
-      idx_q        <= idx_d;
+      //idx_q        <= idx_d;
       bank_word_q  <= bank_word_d;
     end
   end
