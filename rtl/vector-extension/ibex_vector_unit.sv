@@ -269,6 +269,8 @@ module ibex_vector_unit #(
   `endif
   );
 
+  // NOTE: for simplicity, we always set idx_mode to 0 (start at byte 0 of bank word), because vstart is always 0 in this cut.
+
   logic [31:0] base_q;
   logic [4:0] vd_idx_q;
   // ---- LSU micro-FSM ----
@@ -330,7 +332,7 @@ module ibex_vector_unit #(
       (elements_from_read == 3'd1) ? 4'b1100 : 4'b0000;
   end
 
-  logic [63:0] merged = {beat2_q, beat1_q}; // todo: check if this is still correct for SEW=16
+  logic [63:0] merged; // todo: Latches/Konflikt risiko warum ??
 
   always_comb begin
     // defaults
@@ -356,7 +358,7 @@ module ibex_vector_unit #(
 
     // directly assigned see the assign statements above
     vrf_wr_vreg  = vd_idx_q;
-    vrf_wr_bank  = idx_q[3:2];
+    vrf_wr_bank  = byte_idx[3:2];
 
     unique case (lsu_q)
       LSU_IDLE:  if (lsu_start) begin
@@ -383,6 +385,7 @@ module ibex_vector_unit #(
           if (data_err_i) lsu_d = LSU_FAULT;
           else begin
             beat1_d = data_rdata_i;
+            // todo: when optimizing see above: lsu_d = need_second ? LSU_REQ2 : LSU_ALIGN; // <— use the condition
             lsu_d   = misaligned ? LSU_REQ2 : LSU_ALIGN;
           end
         end
@@ -406,11 +409,24 @@ module ibex_vector_unit #(
         end
       end
 
+      // when we use optimization obove: todo:
+      //LSU_ALIGN: begin
+      //  if (need_second) begin
+      //    logic [63:0] merged = {beat2_q, beat1_q};
+      //    word_d = merged >> (8*sh);
+      //  end else begin
+      //    word_d = beat1_q >> (8*sh);   // auch bei nur einem Read sh berücksichtigen
+      //  end
+      //  lsu_d = LSU_WRITE;
+      //end
+
+
       // ----- Assemble the exact 4-byte window we want -----
-      LSU_ALIGN: begin
+      LSU_ALIGN: begin // todo: maybe will be later replaced by the commented out optimization above
         if (misaligned) begin
           // 64-bit merge: [beat2][beat1], then pick 4 bytes starting at 'sh'
           // logic [63:0] merged = {beat2_q, beat1_q};
+          merged = {beat2_q, beat1_q};
           word_d = merged >> (sh * 8);
         end else begin
           word_d = beat1_q;
