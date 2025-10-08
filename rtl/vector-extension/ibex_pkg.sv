@@ -22,8 +22,9 @@ package ibex_pkg;
   typedef struct packed {
     logic        done;        // VU completed this instruction
     logic        trap;        // memory fault or illegal
-    logic [31:0] rd_wdata;    // value to write into scalar rd (only for vsetvli)
-    logic        rd_we;       // write enable for scalar rd (vsetvli rd!=x0)
+    // for now: write directly to register file.
+    //logic [31:0] rd_wdata;    // value to write into scalar rd (only for vsetvli)
+    //logic        rd_we;       // write enable for scalar rd (vsetvli rd!=x0)
     logic  [4:0] cause;       // optional: trap cause (load/store fault)
   } v_resp_t;
 

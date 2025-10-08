@@ -24,7 +24,22 @@ module ibex_vector_unit #(
   input  logic                     data_gnt_i,
   input  logic                     data_rvalid_i,
   input  logic                     data_err_i,
-  input  logic [31:0]              data_rdata_i
+  input  logic [31:0]              data_rdata_i,
+
+  // Register File interface
+  //Read port R1
+  output  logic [4:0]           raddr_a_o,
+  input logic [DataWidth-1:0]   rdata_a_i,
+
+  //Read port R2
+  output  logic [4:0]           raddr_b_o,
+  input logic [DataWidth-1:0]   rdata_b_i,
+
+  // Write port W1
+  output  logic [4:0]           waddr_a_o,
+  output  logic [DataWidth-1:0] wdata_a_o,
+  output  logic                 we_a_o,
+  input   logic                 err_i
 );
 
   // internal signals and state registers
@@ -37,10 +52,11 @@ module ibex_vector_unit #(
   logic         is_vsetvli_q, is_vsetvli_d;
   logic         is_vle8_q, is_vle8_d;
   logic         is_vse8_q, is_vse8_d;
-  // (later: is_vle16_q, is_vse16_q ...) todo: Do we need these??
+
+  logic [31:0]  rs_data_q, rs_data_d;
 
   // ---- Control FSM ----
-  typedef enum logic [2:0] {IDLE, DECODE, EXECUTE, WRITEBK, TRAP} vstate_e;
+  typedef enum logic [2:0] {IDLE, DECODE, EXECUTE, WRITEBK, DONE, TRAP} vstate_e;
   vstate_e state_q, state_d;
 
   // ---- LSU / VRF state ----
@@ -58,7 +74,7 @@ module ibex_vector_unit #(
   logic [4:0] vl_q, vl_d;      // up to 16 (for SEW=8) or 8 (for SEW=16). In specification vl is a 32 bit register. 
   logic [1:0] sew_q, sew_d;     // 0=8b, 1=16b // todo: should these be normally extracted from vtype CSR?
 
-  logic [1:0] sew_sel;
+  // hilfvariablen verwendet in Execute stage
   logic [31:0] avl;
   logic [4:0] max_elems;
 
@@ -77,6 +93,7 @@ module ibex_vector_unit #(
       is_vsetvli_q  <= 1'b0;
       is_vle8_q     <= 1'b0;
       is_vse8_q     <= 1'b0;
+      rs_data_q     <= '0;
       // reset CSR regs
       vl_q          <= '0;
       sew_q         <= '0;
@@ -89,6 +106,7 @@ module ibex_vector_unit #(
       is_vsetvli_q  <= is_vsetvli_d;
       is_vle8_q     <= is_vle8_d;
       is_vse8_q     <= is_vse8_d;
+      rs_data_q     <= rs_data_d; 
       // update CSR regs
       vl_q         <= vl_d;
       sew_q        <= sew_d;
@@ -98,8 +116,17 @@ module ibex_vector_unit #(
   // next-state logic
   always_comb begin
     state_d     = state_q;
+
     v_resp_o    = '{default:0}; // clear response by default
     v_req_ready_o = 1'b0;
+
+    // output to the register file
+    raddr_a_o = req_rs1_q;
+    raddr_b_o = req_rs1_q;
+
+    waddr_a_o = 32'b0;
+    wdata_a_o = 0;
+    we_a_o = 1'b0;
 
     req_insn_d   = req_insn_q;
     req_rs1_d    = req_rs1_q;
@@ -108,6 +135,7 @@ module ibex_vector_unit #(
     is_vsetvli_d = is_vsetvli_q;
     is_vle8_d = is_vle8_q;
     is_vse8_d = is_vse8_q;
+    rs_data_d = rs_data_q
 
     // Defaults for next-state regs and LSU start pulse
     vl_d        = vl_q;
@@ -120,12 +148,12 @@ module ibex_vector_unit #(
       IDLE: begin
         v_req_ready_o = 1'b1; // ready to take new request
         if (v_req_valid_i) begin
-          state_d = DECODE;
+          state_d = EXECUTE;
           req_insn_d   = v_req_i.insn;
           req_rs1_d    = v_req_i.rs1_val;
           req_rd_d     = v_req_i.rd_idx;
 
-          // Do we need to save this signals?
+          // Do we need to save this signals? we can read them directly from req_*_q signals
           is_vsetvli_d = (v_req_i.insn[6:0]  == 7'h57);
           is_vle8_d    = (v_req_i.insn[6:0]  == 7'h07);
           is_vse8_d    = (v_req_i.insn[6:0]  == 7'h27);
@@ -141,94 +169,73 @@ module ibex_vector_unit #(
         end
       end
 
-      // not needed for now, we will lose one cycle maybe later we can optimize it
-      //DECODE: begin
-      //  v_req_ready_o = 1'b0;
-
-      //  if (is_vsetvli_q) state_d = EXECUTE;        // one-cycle op
-      //  else if (is_vle8_q) state_d = EXECUTE;      // will kick LSU micro-FSM
-      //  else if (is_vse8_q) state_d = EXECUTE;
-      //  else begin
-      //    // unsupported -> trap
-      //    // v_resp_o.done = 1'b1;
-      //    // v_resp_o.trap = 1'b1;
-      //    state_d = TRAP;
-      //  end
-      //end
+      DECODE: begin
+        v_req_ready_o = 1'b0;
+        // read from register file: laut ibex documentation 
+        // "https://ibex-core.readthedocs.io/en/latest/03_reference/register_file.html":
+        // register file data is available the same cycle a read is requested.
+        raddr_a_o = req_rs1_q;
+        rs_data_d = rdata_a_i;
+        state_d = EXECUTE;
+      end
 
       EXECUTE: begin
         if (is_vsetvli_q) begin
           v_req_ready_o = 1'b0;
-          sew_sel = req_insn_q[21:20]; // example
-          avl    = req_rs1_q;
-
-          case (sew_sel)
-            2'b00: sew_d = 2'd0; // SEW=8
-            2'b01: sew_d = 2'd1; // SEW=16
-            default: sew_d = 2'd0;
-          endcase
-
+          avl    = rs_data_q; // Hilfvariable
+          sew_d = req_insn_q[25:23]; // todo: In which position in vtypei we find sew_d? 23 to 25?
           // compute max elements per vreg
-          max_elems = (sew_d==0) ? 16 : 8;
+          max_elems = (sew_d==0) ? 16 : 8; // hilfvariable
 
           vl_d = (avl < max_elems) ? avl[4:0] : max_elems;
 
           state_d = WRITEBK;
         end
-        else if ((is_vle8_q) && (sew_q == 2'd0)) begin
+        else if (is_vle8_q) begin
           // ---- kick LSU micro-FSM ----
-          // set up starting indices, base, dest vreg, etc.
-          // (do not emit v_resp here; LSU will assert done when finished)
-          // ld_start    = 1'b1;      // a one-cycle pulse to start LSU
           ld_start = (lsu_q == LSU_IDLE);  // single-cycle pulse when LSU idle
-          if (ld_done) state_d = WRITEBK;  // for loads, WB often just signals done
-          // state_d      = EXECUTE;   // stay here until LSU_finished
-          if (ld_done) state_d = WRITEBK;
-        end
-        else if (is_vse8_q && (sew_q == 2'd0)) begin
-          st_start = (st_q == ST_IDLE);       // one-cycle pulse to start
-          if (st_done) state_d = WRITEBK;     // scalar WB usually none; just signal done
-          if (st_fault) begin
-            v_resp_o.trap = 1'b1;
-            state_d = WRITEBK;
+          if (ld_done) begin
+            if (ld_fault) state_d = TRAP;
+            else state_d = DONE;
           end
         end
-
+        else if (is_vse8_q) begin
+          st_start = (st_q == ST_IDLE);       // one-cycle pulse to start
+          if (st_done) begin
+            if (st_fault) state_d = TRAP;
+            else state_d = DONE;
+          end
+        end
       end
 
       WRITEBK: begin
-        v_req_ready_o = 1'b0;
-        v_resp_o.done     = 1'b1;
+        v_req_ready_o     = 1'b0;
+        v_resp_o.done     = 1'b0;
         v_resp_o.trap     = 1'b0;
-        // in the future maybe we will directly write to register file
-        // here we just return the value
         if (is_vsetvli_q) begin
-          // todo: why should i write back vl/sew to rd? yes: see v-spec-1.0 page 25
-          v_resp_o.rd_we    = (req_rd_q != 0);
-          v_resp_o.rd_wdata = {27'd0, vl_q}; // return VL in rd
-        end else begin
-          // VLE8 and SLE8 does not write back to scalar rd in this cut
-          v_resp_o.rd_we    = 1'b0;
-          v_resp_o.rd_wdata = 32'd0;
+          waddr_a_o = req_rd_d;
+          wdata_a_o = vl_q;
+          we_a_o = 1;
         end
-        state_d = IDLE;
+        state_d = DONE;
       end
 
       TRAP: begin
         // stay in trap until reset
-        v_req_ready_o = 1'b0;
+        v_req_ready_o     = 1'b0;
         v_resp_o.done     = 1'b1;
         v_resp_o.trap     = 1'b1;
-        v_resp_o.rd_we    = 1'b0;
-        v_resp_o.rd_wdata = 32'd0;
+        //v_resp_o.rd_we    = 1'b0; // for now we decided to write directly to the register file
+        //v_resp_o.rd_wdata = 32'd0; // for now we decided to write directly to the register file
         state_d = IDLE; // or stay in TRAP? for now the core will handle it
       end
 
-      // DONE: begin
-      //   // wait until Ibex sees done, then back to IDLE
-      //   v_req_ready_o = 1'b0;
-      //   if (!v_req_valid_i) state_d = IDLE;
-      // end
+      DONE: begin
+        v_req_ready_o = 1'b0;
+        v_resp_o.done     = 1'b1;
+        v_resp_o.trap     = 1'b0;
+        state_d = IDLE;
+      end
     endcase
   end
 
