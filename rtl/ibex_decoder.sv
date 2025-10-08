@@ -297,6 +297,57 @@ module ibex_decoder #(
         end
       end
 
+      OPCODE_VL_UNIT: begin // Vector Load unit-stride
+        if (instr[31:20] != 12'b0) begin // lumop, vlmul, vsew, vta, vma must be zero and are not supported
+          illegal_insn = 1'b1;
+        end
+        else if (instr[14:12] != 3'b0 && instr[14:12] != 3'b5) begin // only vse8 and vse16 supported
+          illegal_insn = 1'b1;
+        end
+        else begin
+          // send the request to the vector unit
+          v_req.insn = instr;
+          v_req.rs1_val = instr_rs1;
+          v_req.rd_idx = instr_rd;
+          v_req_valid = 1'b1;
+          rf_wdata_sel_o = RF_WD_VEC;
+        end
+      end
+
+      OPCODE_VS_UNIT: begin // vector store unit-stride
+        if (instr[31:20] != 12'b0) begin // lumop, vlmul, vsew, vta, vma must be zero and are not supported
+          illegal_insn = 1'b1;
+        end
+        else if (instr[14:12] != 3'b0 && instr[14:12] != 3'b5) begin // only vse8 and vse16 supported. todo: check &&
+          illegal_insn = 1'b1;
+        end
+        else begin
+          // send the request to the vector unit
+          v_req.insn = instr;
+          v_req.rs1_val = instr_rs1;
+          v_req.rd_idx = instr_rd;
+          v_req_valid = 1'b1;
+          rf_wdata_sel_o = RF_WD_VEC;
+        end
+      end
+
+      OPCODE_V_VSETVLI: begin
+        if (instr[14:12] != 3'b111) begin 
+          illegal_insn = 1'b1;
+        end
+        else if (instr[31] != 1'b0) begin
+          illegal_insn = 1'b1;
+        end
+        else begin
+          // send the request to the vector unit
+          v_req.insn = instr;
+          v_req.rs1_val = instr_rs1;
+          v_req.rd_idx = instr_rd;
+          v_req_valid = 1'b1;
+          rf_wdata_sel_o = RF_WD_VEC;
+        end
+      end
+
       ///////////
       // Jumps //
       ///////////

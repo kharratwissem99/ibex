@@ -77,7 +77,10 @@ package ibex_pkg;
 
   typedef enum logic [6:0] {
     OPCODE_LOAD     = 7'h03,
-    OPCODE_PROXY    = 7'h0B,
+    OPCODE_PROXY    = 7'h0B, // use for testing only, not in spec
+    OPCODE_VL_UNIT  = 7'h07,  // Vector Load unit-stride
+    OPCODE_VS_UNIT  = 7'h27,  // Vector Store unit-stride
+    OPCODE_V_VSETVLI = 7'h57,  // Vector VSETVLI
     OPCODE_MISC_MEM = 7'h0f,
     OPCODE_OP_IMM   = 7'h13,
     OPCODE_AUIPC    = 7'h17,
