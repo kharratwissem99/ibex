@@ -59,28 +59,6 @@ module ibex_vector_unit #(
   typedef enum logic [2:0] {IDLE, DECODE, EXECUTE, WRITEBK, DONE, TRAP} vstate_e;
   vstate_e state_q, state_d;
 
-  // ---- LSU / VRF state ----
-  typedef enum logic [3:0] {
-    LSU_IDLE, LSU_SETUP,
-    LSU_REQ1, LSU_WAIT1,
-    LSU_REQ2, LSU_WAIT2,
-    LSU_ALIGN,
-    LSU_WRITE,
-    LSU_DONE, LSU_FAULT
-  } lsu_state_e;
-  lsu_state_e ld_q, ld_d;
-
-  // Store LSU
-  typedef enum logic [3:0] {
-    ST_IDLE, ST_SETUP,
-    ST_VRF_RD, ST_VRF_LATCH,
-    ST_REQ1, ST_WAIT1,
-    ST_REQ2, ST_WAIT2,
-    ST_DONE, ST_FAULT
-  } st_state_e;
-
-  st_state_e st_q, st_d;
-
   // simple CSR regs, todo: do we need vtype?, vstart?, do we need state and next state for them?
   logic [4:0] vl_q, vl_d;      // up to 16 (for SEW=8) or 8 (for SEW=16). In specification vl is a 32 bit register. 
   logic [1:0] sew_q, sew_d;     // 0=8b, 1=16b // todo: should these be normally extracted from vtype CSR?
@@ -263,8 +241,5 @@ module ibex_vector_unit #(
     .vrf_peek_idx_i (vd_idx_q)
   `endif
   );
-
-  logic [31:0] base_q;
-  logic [4:0] vd_idx_q;
 
 endmodule
