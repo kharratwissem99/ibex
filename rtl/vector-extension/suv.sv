@@ -41,7 +41,6 @@ module suv (
 
   logic  [4:0] idx_e_q, idx_e_d;      // 0..15 (element index) for SEW=8, wenn SEW=16 dann 0..7
   logic [5:0] byte_idx;
-  logic [31:0] word_q,  word_d;       // final 32b window for this beat
 
   logic [31:0] addr, a0_aligned, a1_aligned;
   logic [1:0]  sh;                    // byte offset within 32b word
@@ -49,7 +48,6 @@ module suv (
   // helpers
   logic [2:0] elements_left;       
   logic [2:0] elems_beat;
-  logic [3:0] mask;
 
   localparam int BYTES_PER_BEAT = 4;
   logic [1:0] EEW_BYTES;
@@ -72,56 +70,27 @@ module suv (
   assign vrf_rd_vreg_o = vd_idx_i;
   assign vrf_rd_bank_o = byte_idx[3:2];
 
-
   assign addr       = base_i + byte_idx; // current byte address after incremention // 
   assign a0_aligned = {addr[31:2], 2'b00}; // aligned down
 
   assign ELEMS_PER_BEAT = BYTES_PER_BEAT / EEW_BYTES;
-  assign elements_left       = (vl_q > idx_e_q) ? (vl_q - idx_e_q) : 3'd0;
+  assign elements_left       = (vl_i > idx_e_q) ? (vl_i - idx_e_q) : 3'd0;
   assign elems_beat  = (elements_left > ELEMS_PER_BEAT) ? ELEMS_PER_BEAT : elements_left;
   assign Nbytes      = elems_beat * EEW_BYTES;
   assign sh         = addr[1:0];
   assign need_two   = (sh != 2'd0) && ((sh + Nbytes) > 3'd4); // wir brauchen zwei beats wenn die verschiebung and der anzahl der gebleiebenen Bytes größer als 4 ist.
 
-  assign a1_aligned = a0_aligned + 32'd4; // aligned up
-
-  // mask for tail (idx_mod is always 0 here) // todo: check if this is still correct for SEW=16
-  
-  always_comb begin 
-    if (EEW_BYTES == 1) begin // sew=8
-      mask =
-        (elems_beat == 3'd4) ? 4'b1111 :
-        (elems_beat == 3'd3) ? 4'b0111 :
-        (elems_beat == 3'd2) ? 4'b0011 :
-        (elems_beat == 3'd1) ? 4'b0001 : 4'b0000;
-    end
-    else if (EEW_BYTES == 2) begin // sew=16
-      mask =
-        (elems_beat == 3'd2) ? 4'b1111 :
-        (elems_beat == 3'd1) ? 4'b1100 : 4'b0000;
-    end
-    // todo: we can implement vle32??
-  end
-
-  logic [31:0] bank_word_q, bank_word_d;  // 32-bit from VRF bank
-  logic [3:0]  w0_strb_l, w1_strb_l;
-  logic [31:0] w0_data_l, w1_data_l;
-  logic [2:0]  first, socond;
-
-  // precompute masks/data for current beat (from bank_word_q)
   assign first = need_two ? (3'd4 - {1'b0,sh}) : Nbytes;
   assign second= need_two ? (Nbytes - first)         : 3'd0;
-
   // one-beat packet (or first of two)
   assign w0_data_l = bank_word_q << (8*sh);
-
-  assign w0_strb_l = (first==3'd4) ? 4'b1111
-                          : ((4'b1111 >> (4 - first)) << sh);
+  assign w0_strb_l = (first==3'd4) ? 4'b1111 : ((4'b1111 >> (4 - first)) << sh);
 
   // second-beat packet (if needed)
   assign w1_data_l = bank_word_q >> (8*first);
-  assign w1_strb_l = (second==3'd0) ? 4'b0000
-                        : (4'b1111 >> (4 - second));
+  assign w1_strb_l = (second==3'd0) ? 4'b0000 : (4'b1111 >> (4 - second));
+  
+  assign a1_aligned = a0_aligned + 32'd4; // aligned up
 
   // VRF connections for store
   assign vrf_rd_vreg_o = vd_idx;
@@ -149,7 +118,7 @@ module suv (
     unique case (st_state_q)
       ST_IDLE: begin
         if (st_rq) begin
-          if (vl_q == 0) st_state_d  = ST_VRF_RD;
+          if (vl_i == 0) st_state_d  = ST_VRF_RD;
           else st_state_d  = ST_DONE;
           idx_e_d = '0; // wichtig
         end
@@ -187,7 +156,7 @@ module suv (
         data_we_o    = 1'b1;
         data_wdata_o = w1_data_l;
         data_be_o    = w1_strb_l;
-        if (data_req_o && data_gnt_i) st_state_d = ST_WAIT2;
+        if (data_gnt_i) st_state_d = ST_WAIT2;
       end
 
       ST_WAIT2: begin
@@ -196,17 +165,12 @@ module suv (
           else begin           
             //st_state_d = ST_DONE;
             idx_e_d = idx_e_q + elems_beat;                  // zero-extends fine
-            st_state_d  = (idx_e_d >= vl_q) ? ST_DONE : ST_VRF_RD;
+            st_state_d  = (idx_e_d >= vl_i) ? ST_DONE : ST_VRF_RD;
           end
         end
-        // (same note as WAIT1 if your memory has no store response)
       end
 
       ST_DONE: begin
-        // advance to next chunk or finish instruction
-        //idx_e_d = idx_e_q + N;                  // zero-extends fine
-        //st_state_d  = (idx_e_d >= vl_q) ? ST_IDLE : ST_VRF_RD;
-        //if (idx_e_d >= vl_q) st_done = 1'b1;  // signal control FSM
         st_done = 1'b1;  // signal control FSM
         st_state_d    = ST_IDLE;
       end
@@ -222,9 +186,11 @@ module suv (
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       st_state_q         <= ST_IDLE;
+      idx_e_q   <= '0;
       bank_word_q  <= '0;
     end else begin
-      st_state_q         <= st_state_d;
+      st_state_q   <= st_state_d;
+      idx_e_q   <= idx_e_d;
       bank_word_q  <= bank_word_d;
     end
 endmodule
