@@ -50,8 +50,8 @@ module ibex_vector_unit #(
   logic  [4:0]  req_rd_q, req_rd_d;
 
   logic         is_vsetvli_q, is_vsetvli_d;
-  logic         is_vle8_q, is_vle8_d;
-  logic         is_vse8_q, is_vse8_d;
+  logic         is_vle_q, is_vle_d;
+  logic         is_vse_q, is_vse_d;
 
   logic [31:0]  rs_data_q, rs_data_d;
 
@@ -91,8 +91,8 @@ module ibex_vector_unit #(
       req_rs1_q     <= '0;
       req_rd_q      <= '0;
       is_vsetvli_q  <= 1'b0;
-      is_vle8_q     <= 1'b0;
-      is_vse8_q     <= 1'b0;
+      is_vle_q     <= 1'b0;
+      is_vse_q     <= 1'b0;
       rs_data_q     <= '0;
       // reset CSR regs
       vl_q          <= '0;
@@ -104,8 +104,8 @@ module ibex_vector_unit #(
       req_rs1_q     <= req_rs1_d;
       req_rd_q      <= req_rd_d;
       is_vsetvli_q  <= is_vsetvli_d;
-      is_vle8_q     <= is_vle8_d;
-      is_vse8_q     <= is_vse8_d;
+      is_vle_q     <= is_vle_d;
+      is_vse_q     <= is_vse_d;
       rs_data_q     <= rs_data_d; 
       // update CSR regs
       vl_q         <= vl_d;
@@ -133,8 +133,8 @@ module ibex_vector_unit #(
     req_rd_d     = req_rd_q;
 
     is_vsetvli_d = is_vsetvli_q;
-    is_vle8_d = is_vle8_q;
-    is_vse8_d = is_vse8_q;
+    is_vle_d = is_vle_q;
+    is_vse_d = is_vse_q;
     rs_data_d = rs_data_q
 
     // Defaults for next-state regs and LSU start pulse
@@ -155,17 +155,17 @@ module ibex_vector_unit #(
 
           // Do we need to save this signals? we can read them directly from req_*_q signals
           is_vsetvli_d = (v_req_i.insn[6:0]  == 7'h57);
-          is_vle8_d    = (v_req_i.insn[6:0]  == 7'h07);
-          is_vse8_d    = (v_req_i.insn[6:0]  == 7'h27);
-          if (!(is_vsetvli_d || is_vle8_d || is_vse8_d)) begin
+          is_vle_d    = (v_req_i.insn[6:0]  == 7'h07);
+          is_vse_d    = (v_req_i.insn[6:0]  == 7'h27);
+          if (!(is_vsetvli_d || is_vle_d || is_vse_d)) begin
             // unsupported instruction -> trap
             state_d = TRAP;
           end
         end else begin
           // no new request: clear decode flags
           is_vsetvli_d = 1'b0;
-          is_vle8_d    = 1'b0;
-          is_vse8_d    = 1'b0;
+          is_vle_d    = 1'b0;
+          is_vse_d    = 1'b0;
         end
       end
 
@@ -191,7 +191,7 @@ module ibex_vector_unit #(
 
           state_d = WRITEBK;
         end
-        else if (is_vle8_q) begin
+        else if (is_vle_q) begin
           // ---- kick LSU micro-FSM ----
           ld_start = (lsu_q == LSU_IDLE);  // single-cycle pulse when LSU idle
           if (ld_done) begin
@@ -199,7 +199,7 @@ module ibex_vector_unit #(
             else state_d = DONE;
           end
         end
-        else if (is_vse8_q) begin
+        else if (is_vse_q) begin
           st_start = (st_q == ST_IDLE);       // one-cycle pulse to start
           if (st_done) begin
             if (st_fault) state_d = TRAP;
