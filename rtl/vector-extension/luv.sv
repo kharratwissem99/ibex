@@ -8,7 +8,7 @@ module luv (
   input logic  [4:0]   request_type_i,      // 8 oder 16
 
   input  logic         lu_rq,  // pulse to start LSU operation
-  output logic         lsu_done,   // pulse when operation done
+  output logic         ld_done,   // pulse when operation done
   output logic         ld_fault,  // pulse if any fault during operation
   
   // interface to ibex_vrf
@@ -109,7 +109,7 @@ module luv (
     vrf_wr_en    = 1'b0;
     vrf_wr_wdata = data_rdata_i;
     vrf_wr_wstrb = 4'b0000;
-    vrf_wr_vreg  = vd_idx_q;
+    vrf_wr_vreg  = vd_idx_i;
     vrf_wr_bank  = byte_idx[3:2];
 
     data_req_o = 1'b0;
@@ -164,7 +164,7 @@ module luv (
       LSU_WRITE: begin
         // current VRF bank = idx_e_q[3:2]; idx_mod==0 -> no shift needed
         vrf_wr_en    = (elems_beat != 0);
-        vrf_wr_vreg  = vd_idx_q;
+        vrf_wr_vreg  = vd_idx_i;
         vrf_wr_bank  = byte_idx[3:2];
         vrf_wr_wdata = word_q;     // already the right 4-byte window, aligned to byte 0
         vrf_wr_wstrb = mask;       // only low N bytes if tail
