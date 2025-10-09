@@ -68,7 +68,18 @@ module ibex_vector_unit #(
     LSU_WRITE,
     LSU_DONE, LSU_FAULT
   } lsu_state_e;
-  lsu_state_e lsu_q, lsu_d;
+  lsu_state_e ld_q, ld_d;
+
+  // Store LSU
+  typedef enum logic [3:0] {
+    ST_IDLE, ST_SETUP,
+    ST_VRF_RD, ST_VRF_LATCH,
+    ST_REQ1, ST_WAIT1,
+    ST_REQ2, ST_WAIT2,
+    ST_DONE, ST_FAULT
+  } st_state_e;
+
+  st_state_e st_q, st_d;
 
   // simple CSR regs, todo: do we need vtype?, vstart?, do we need state and next state for them?
   logic [4:0] vl_q, vl_d;      // up to 16 (for SEW=8) or 8 (for SEW=16). In specification vl is a 32 bit register. 
@@ -83,6 +94,15 @@ module ibex_vector_unit #(
   // internal signals used for communication between the main control FSM and Store FSM
   logic st_rq, st_done, st_fault;
 
+  logic lsu_done;
+  assign lsu_done = ld_done || st_done;
+
+  logic lsu_fault;
+  assign lsu_fault = st_fault || ld_fault;
+
+  assign ld_rq = (ld_q == LSU_IDLE) && (state_q == EXECUTE) && (opcode_q == 7'h07);
+  assign st_rq = (st_q == ST_IDLE) && (state_q == EXECUTE) && (opcode_q == 7'h27);
+
   // todo: should we combine all sequential processes into one always_ff block? until now 3 were used.
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
@@ -90,10 +110,8 @@ module ibex_vector_unit #(
       req_insn_q    <= '0;
       req_rs1_q     <= '0;
       req_rd_q      <= '0;
-      is_vsetvli_q  <= 1'b0;
-      is_vle_q     <= 1'b0;
-      is_vse_q     <= 1'b0;
       rs_data_q     <= '0;
+      opcode_q      <= '0;
       // reset CSR regs
       vl_q          <= '0;
       sew_q         <= '0;
@@ -103,13 +121,27 @@ module ibex_vector_unit #(
       req_insn_q    <= req_insn_d;
       req_rs1_q     <= req_rs1_d;
       req_rd_q      <= req_rd_d;
-      is_vsetvli_q  <= is_vsetvli_d;
-      is_vle_q     <= is_vle_d;
-      is_vse_q     <= is_vse_d;
-      rs_data_q     <= rs_data_d; 
+      rs_data_q     <= rs_data_d;
+      opcode_q      <= opcode_d;
       // update CSR regs
       vl_q         <= vl_d;
       sew_q        <= sew_d;
+    end
+  end
+
+  // Die letzte request speichern
+  always_comb begin
+    if (v_req_valid_i) begin
+      req_insn_d   = v_req_i.insn;
+      opcode_d     = v_req_i.insn[6:0];
+      req_rs1_d    = v_req_i.rs1_val;
+      req_rd_d     = v_req_i.rd_idx;
+    end
+    else begin
+      req_insn_d   = req_insn_q;
+      opcode_d     = opcode_q;
+      req_rs1_d    = req_rs1_q;
+      req_rd_d     = req_rd_q;
     end
   end
 
@@ -117,56 +149,30 @@ module ibex_vector_unit #(
   always_comb begin
     state_d     = state_q;
 
+    //response
     v_resp_o    = '{default:0}; // clear response by default
     v_req_ready_o = 1'b0;
 
     // output to the register file
-    raddr_a_o = req_rs1_q;
-    raddr_b_o = req_rs1_q;
-
-    waddr_a_o = 32'b0;
-    wdata_a_o = 0;
-    we_a_o = 1'b0;
-
-    req_insn_d   = req_insn_q;
-    req_rs1_d    = req_rs1_q;
-    req_rd_d     = req_rd_q;
-
-    is_vsetvli_d = is_vsetvli_q;
-    is_vle_d = is_vle_q;
-    is_vse_d = is_vse_q;
+    raddr_a_o = req_rs1_q; // read address a
+    raddr_b_o = req_rs1_q; // read address v
+    waddr_a_o = 32'b0; //write address
+    wdata_a_o = 0; // write data
+    we_a_o = 1'b0; // write enable
 
     rs_data_d = rs_data_q
 
-    // Defaults for next-state regs and LSU start pulse
+    // crs registers
     vl_d        = vl_q;
     sew_d       = sew_q;
-    
-    ld_rq   = 1'b0;
-    st_rq   = 1'b0;
 
     case (state_q)
       IDLE: begin
         v_req_ready_o = 1'b1; // ready to take new request
         if (v_req_valid_i) begin
-          state_d = EXECUTE;
-          req_insn_d   = v_req_i.insn;
-          req_rs1_d    = v_req_i.rs1_val;
-          req_rd_d     = v_req_i.rd_idx;
-
-          // Do we need to save this signals? we can read them directly from req_*_q signals
-          is_vsetvli_d = (v_req_i.insn[6:0]  == 7'h57);
-          is_vle_d    = (v_req_i.insn[6:0]  == 7'h07);
-          is_vse_d    = (v_req_i.insn[6:0]  == 7'h27);
-          if (!(is_vsetvli_d || is_vle_d || is_vse_d)) begin
-            // unsupported instruction -> trap
-            state_d = TRAP;
-          // end
-        end else begin
-          // no new request: clear decode flags
-          is_vsetvli_d = 1'b0;
-          is_vle_d    = 1'b0;
-          is_vse_d    = 1'b0;
+          if (v_req_i.insn[6:0] == 7'h57) state_d = DECODE;
+          else if (v_req_i.insn[6:0] == 7'h07 || v_req_i.insn[6:0] == 7'h07) state_d = EXECUTE;
+          else state_d = TRAP;
         end
       end
 
@@ -177,33 +183,23 @@ module ibex_vector_unit #(
         // register file data is available the same cycle a read is requested.
         raddr_a_o = req_rs1_q;
         rs_data_d = rdata_a_i;
-        state_d = EXECUTE;
+        if (err_i) state_d = TRAP;
+        else state_d = EXECUTE;
       end
 
       EXECUTE: begin
-        if (is_vsetvli_q) begin
+        if (opcode_q == 7'h57) begin
           v_req_ready_o = 1'b0;
           avl    = rs_data_q; // Hilfvariable
           sew_d = req_insn_q[25:23]; // todo: In which position in vtypei we find sew_d? 23 to 25?
           // compute max elements per vreg
           max_elems = (sew_d==0) ? 16 : 8; // hilfvariable
-
           vl_d = (avl < max_elems) ? avl[4:0] : max_elems;
-
           state_d = WRITEBK;
         end
-        else if (is_vle_q) begin
-          // ---- kick LSU micro-FSM ----
-          ld_rq = (lsu_q == LSU_IDLE);  // single-cycle pulse when LSU idle
-          if (ld_done) begin
-            if (ld_fault) state_d = TRAP;
-            else state_d = DONE;
-          end
-        end
-        else if (is_vse_q) begin
-          st_rq = (st_q == ST_IDLE);       // one-cycle pulse to start
-          if (st_done) begin
-            if (st_fault) state_d = TRAP;
+        else begin 
+          if (lsu_done) begin
+            if (lsu_fault) state_d = TRAP;
             else state_d = DONE;
           end
         end
@@ -213,7 +209,7 @@ module ibex_vector_unit #(
         v_req_ready_o     = 1'b0;
         v_resp_o.done     = 1'b0;
         v_resp_o.trap     = 1'b0;
-        if (is_vsetvli_q) begin
+        if (opcode_q == 7'h57) begin
           waddr_a_o = req_rd_d;
           wdata_a_o = vl_q;
           we_a_o = 1;
@@ -226,8 +222,6 @@ module ibex_vector_unit #(
         v_req_ready_o     = 1'b0;
         v_resp_o.done     = 1'b1;
         v_resp_o.trap     = 1'b1;
-        //v_resp_o.rd_we    = 1'b0; // for now we decided to write directly to the register file
-        //v_resp_o.rd_wdata = 32'd0; // for now we decided to write directly to the register file
         state_d = IDLE; // or stay in TRAP? for now the core will handle it
       end
 
@@ -274,51 +268,44 @@ module ibex_vector_unit #(
 
   logic [31:0] base_q;
   logic [4:0] vd_idx_q;
-  // ---- LSU micro-FSM ----
-  // will be later moved to a load store unit module
   logic  [4:0] idx_q, idx_d;      // 0..15 (element index) for SEW=8, wenn SEW=16 dann 0..7
+  logic [5:0] byte_idx;
   logic [31:0] beat1_q, beat1_d;      // first aligned word
   logic [31:0] beat2_q, beat2_d;      // second aligned word (for misaligned)
   logic [31:0] word_q,  word_d;       // final 32b window for this beat
 
-  // these are for lsuv module
-  // assign base_q = base_i; this are for lsuv module
-  // assign vd_idx_q = vd_idx_i;
-
-  // Use latched request values to derive base/index
-  assign base_q = req_rs1_q;
-  assign vd_idx_q = req_rd_q;
-
-  // assign vrf_wr_vreg  = vd_idx_q; // destination vreg, we don't need to change it in the combinatorial logic
-  // assign vrf_wr_bank  = idx_q[3:2];  // 4 lanes per bank when SEW=8
-
   logic [31:0] addr, a0_aligned, a1_aligned;
   logic [1:0]  sh;                    // byte offset within 32b word
   logic        misaligned;
-
-  localparam int BYTES_PER_BEAT = 4;
-  logic [1:0] EEW_BYTES = (sew_q==2'd0) ? 1 : 2;
-  logic [2:0] ELEMS_PER_BEAT = BYTES_PER_BEAT / EEW_BYTES; // 4 oder 2
-
-  // todo: why should we write again, if we take the bytes that we need from the first beat. Use the following to integrate this feature
-  // until now we always read two beats when misaligned
-  //logic [2:0]  Nbytes      = elems_beat * EEW_BYTES;         // 1..4 (8b: 4/3/2/1; 16b: 4/2)
-  //logic        need_second = (sh != 2'd0) && ((sh + Nbytes) > 3'd4);
-
-  logic [5:0] byte_idx;                               // bis 30 (16*2-2)
-  assign byte_idx = idx_e_q * EEW_BYTES;
-
-  assign addr       = base_q + byte_idx; // current byte address after incremention // 
-  assign sh         = addr[1:0];
-  assign misaligned = (sh != 2'b00);
-  assign a0_aligned = {addr[31:2], 2'b00}; // aligned down
-  assign a1_aligned = a0_aligned + 32'd4; // aligned up
 
   // helpers
   logic [2:0] elements_left       = (vl_q > idx_q) ? (vl_q - idx_q) : 3'd0;
   logic [2:0] elements_from_read  = (elements_left > ELEMS_PER_BEAT) ? ELEMS_PER_BEAT : elements_left; // 1..4 (last can be 1..3)
 
   logic [3:0] mask;
+
+  localparam int BYTES_PER_BEAT = 4;
+  logic [1:0] EEW_BYTES = (sew_q==2'd0) ? 1 : 2;
+  logic [2:0] ELEMS_PER_BEAT = BYTES_PER_BEAT / EEW_BYTES; // 4 oder 2
+
+  // Use latched request values to derive base/index
+  assign base_q = req_rs1_q;
+  assign vd_idx_q = req_rd_q;
+
+  
+
+  // todo: why should we write again, if we take the bytes that we need from the first beat. Use the following to integrate this feature
+  // until now we always read two beats when misaligned
+  //logic [2:0]  Nbytes      = elems_beat * EEW_BYTES;         // 1..4 (8b: 4/3/2/1; 16b: 4/2)
+  //logic        need_second = (sh != 2'd0) && ((sh + Nbytes) > 3'd4);
+
+  assign byte_idx = idx_e_q * EEW_BYTES;
+  assign addr       = base_q + byte_idx; // current byte address after incremention // 
+  assign sh         = addr[1:0];
+  assign misaligned = (sh != 2'b00);
+  assign a0_aligned = {addr[31:2], 2'b00}; // aligned down
+  assign a1_aligned = a0_aligned + 32'd4; // aligned up
+
   // mask for tail (idx_mod is always 0 here) // todo: check if this is still correct for SEW=16
   if (EEW_BYTES == 1) begin // sew=8
     mask =
@@ -337,7 +324,7 @@ module ibex_vector_unit #(
 
   always_comb begin
     // defaults
-    lsu_d = lsu_q;
+    ld_d = ld_q;
     idx_d = idx_q;
     beat1_d = beat1_q;
     beat2_d = beat2_q;
@@ -361,16 +348,16 @@ module ibex_vector_unit #(
     vrf_wr_vreg  = vd_idx_q;
     vrf_wr_bank  = byte_idx[3:2];
 
-    unique case (lsu_q)
+    unique case (ld_q)
       LSU_IDLE:  if (ld_rq) begin
-        lsu_d = LSU_SETUP;
+        ld_d = LSU_SETUP;
         idx_d = '0; // wichtig
       end
 
       LSU_SETUP: begin
         // Preconditions for this first cut (assert in TB):
         // base_q[1:0] == 2'b00  &&  (vl_q % 4 == 0)
-        lsu_d = (vl_q == 0) ? LSU_DONE : LSU_REQ1;
+        ld_d = (vl_q == 0) ? LSU_DONE : LSU_REQ1;
       end
 
       // ----- First aligned read (always) -----
@@ -378,16 +365,16 @@ module ibex_vector_unit #(
         data_req_o  = 1'b1;
         data_addr_o = a0_aligned;   // aligned down
         data_we_o   = 1'b0;
-        if (data_req_o && data_gnt_i) lsu_d = LSU_WAIT1;
+        if (data_req_o && data_gnt_i) ld_d = LSU_WAIT1;
       end
 
       LSU_WAIT1: begin
         if (data_rvalid_i) begin
-          if (data_err_i) lsu_d = LSU_FAULT;
+          if (data_err_i) ld_d = LSU_FAULT;
           else begin
             beat1_d = data_rdata_i;
-            // todo: when optimizing see above: lsu_d = need_second ? LSU_REQ2 : LSU_ALIGN; // <— use the condition
-            lsu_d   = misaligned ? LSU_REQ2 : LSU_ALIGN;
+            // todo: when optimizing see above: ld_d = need_second ? LSU_REQ2 : LSU_ALIGN; // <— use the condition
+            ld_d   = misaligned ? LSU_REQ2 : LSU_ALIGN;
           end
         end
       end
@@ -397,15 +384,15 @@ module ibex_vector_unit #(
         data_req_o  = 1'b1;
         data_addr_o = a1_aligned;
         data_we_o   = 1'b0;
-        if (data_req_o && data_gnt_i) lsu_d = LSU_WAIT2;
+        if (data_req_o && data_gnt_i) ld_d = LSU_WAIT2;
       end
 
       LSU_WAIT2: begin
         if (data_rvalid_i) begin
-          if (data_err_i) lsu_d = LSU_FAULT;
+          if (data_err_i) ld_d = LSU_FAULT;
           else begin
             beat2_d = data_rdata_i;
-            lsu_d   = LSU_ALIGN;
+            ld_d   = LSU_ALIGN;
           end
         end
       end
@@ -418,7 +405,7 @@ module ibex_vector_unit #(
       //  end else begin
       //    word_d = beat1_q >> (8*sh);   // auch bei nur einem Read sh berücksichtigen
       //  end
-      //  lsu_d = LSU_WRITE;
+      //  ld_d = LSU_WRITE;
       //end
 
 
@@ -432,7 +419,7 @@ module ibex_vector_unit #(
         end else begin
           word_d = beat1_q;
         end
-        lsu_d = LSU_WRITE;
+        ld_d = LSU_WRITE;
       end
 
       LSU_WRITE: begin
@@ -445,18 +432,18 @@ module ibex_vector_unit #(
 
         // advance or finish
         idx_d = idx_q + elements_from_read;  // (3-bit -> zero-extends fine)
-        lsu_d = (idx_d >= vl_q) ? LSU_DONE : LSU_REQ1;
+        ld_d = (idx_d >= vl_q) ? LSU_DONE : LSU_REQ1;
       end
 
       LSU_FAULT: begin
         lsu_fault = 1'b1;
         ld_done = 1'b1;
-        lsu_d     = LSU_IDLE;
+        ld_d     = LSU_IDLE;
       end
 
       LSU_DONE: begin
         ld_done = 1'b1;
-        lsu_d    = LSU_IDLE;
+        ld_d    = LSU_IDLE;
       end
     endcase
   end
@@ -464,30 +451,19 @@ module ibex_vector_unit #(
   // State/data registers
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      lsu_q   <= LSU_IDLE;
+      ld_q   <= LSU_IDLE;
       idx_q   <= '0;
       beat1_q <= '0;
       beat2_q <= '0;
       word_q  <= '0;
     end else begin
-      lsu_q   <= lsu_d;
+      ld_q   <= ld_d;
       idx_q   <= idx_d;
       beat1_q <= beat1_d;
       beat2_q <= beat2_d;
       word_q  <= word_d;
     end
   end
-
-  // Store LSU
-  typedef enum logic [3:0] {
-    ST_IDLE, ST_SETUP,
-    ST_VRF_RD, ST_VRF_LATCH,
-    ST_REQ1, ST_WAIT1,
-    ST_REQ2, ST_WAIT2,
-    ST_DONE, ST_FAULT
-  } st_state_e;
-
-  st_state_e st_q, st_d;
 
   //logic [31:0] base_q;              // req_rs1_q (latched earlier)
   //logic  [4:0] vs_idx_q;            // source vreg index (use rd field in your proxy scheme)
