@@ -375,8 +375,7 @@ module ibex_vector_unit #(
           if (data_err_i) ld_d = LSU_FAULT;
           else begin
             beat1_d = data_rdata_i;
-            // todo: when optimizing see above: ld_d = need_second ? LSU_REQ2 : LSU_ALIGN; // <— use the condition
-            ld_d   = misaligned ? LSU_REQ2 : LSU_ALIGN;
+            ld_d   = need_two ? LSU_REQ2 : LSU_ALIGN;
           end
         end
       end
@@ -399,29 +398,14 @@ module ibex_vector_unit #(
         end
       end
 
-      // when we use optimization obove: todo:
-      //LSU_ALIGN: begin
-      //  if (need_second) begin
-      //    logic [63:0] merged = {beat2_q, beat1_q};
-      //    word_d = merged >> (8*sh);
-      //  end else begin
-      //    word_d = beat1_q >> (8*sh);   // auch bei nur einem Read sh berücksichtigen
-      //  end
-      //  ld_d = LSU_WRITE;
-      //end
-
-
-      // ----- Assemble the exact 4-byte window we want -----
-      LSU_ALIGN: begin // todo: maybe will be later replaced by the commented out optimization above
-        if (misaligned) begin
-          // 64-bit merge: [beat2][beat1], then pick 4 bytes starting at 'sh'
-          // logic [63:0] merged = {beat2_q, beat1_q};
+      LSU_ALIGN: begin
+       if (need_second) begin
           merged = {beat2_q, beat1_q};
-          word_d = merged >> (sh * 8);
-        end else begin
-          word_d = beat1_q;
-        end
-        ld_d = LSU_WRITE;
+          word_d = merged >> (8*sh);
+       end else begin
+          word_d = beat1_q >> (8*sh);   // auch bei nur einem Read sh berücksichtigen
+       end
+       ld_d = LSU_WRITE;
       end
 
       LSU_WRITE: begin
@@ -468,8 +452,24 @@ module ibex_vector_unit #(
   end
 
   logic [31:0] bank_word_q, bank_word_d;  // 32-bit from VRF bank
-  logic [31:0] w0_data, w1_data;    // store beats' data
-  logic  [3:0] w0_strb, w1_strb;    // store beats' byte-enables
+  logic [3:0]  w0_strb_l, w1_strb_l;
+  logic [31:0] w0_data_l, w1_data_l;
+  logic [2:0]  first, socond;
+
+  // precompute masks/data for current beat (from bank_word_q)
+  assign first = need_two ? (3'd4 - {1'b0,sh}) : Nbytes;
+  assign second= need_two ? (Nbytes - first)         : 3'd0;
+
+  // one-beat packet (or first of two)
+  assign w0_data_l = bank_word_q << (8*sh);
+
+  assign w0_strb_l = (first==3'd4) ? 4'b1111
+                          : ((4'b1111 >> (4 - first)) << sh);
+
+  // second-beat packet (if needed)
+  assign w1_data_l = bank_word_q >> (8*first);
+  assign w1_strb_l = (second==3'd0) ? 4'b0000
+                        : (4'b1111 >> (4 - second));
 
   // VRF connections for store
   assign vrf_rd_vreg = vs_idx_q;
@@ -493,36 +493,6 @@ module ibex_vector_unit #(
     // status
     st_done       = 1'b0;
     st_fault      = 1'b0;
-
-    // precompute masks/data for current beat (from bank_word_q)
-    logic [1:0]  sh_l = sh;
-    logic [2:0]  N_l  = elems_beat;
-    logic [2:0]  first = need_two ? (3'd4 - {1'b0,sh_l}) : Nbytes;
-    logic [2:0]  second= need_two ? (Nbytes - first)         : 3'd0;
-
-    // one-beat packet (or first of two)
-    logic [31:0] w0_data_l = bank_word_q << (8*sh_l);
-    logic [3:0]  w0_strb_l;
-
-  
-    // full 4-byte mask << sh
-    //logic [3:0]  full_at_sh = (4'b1111 << sh_l); // wir verschieben und erstellen die erste Mask
-    // low N bytes at starting pos sh
-    //logic [3:0]  lowN_at_sh = (N_l==3'd4) ? full_at_sh
-    //                        : ((4'b1111 >> (4 - N_l)) << sh_l);
-    // mask first bytes only (if two-beat)
-    //logic [3:0]  first_mask = (first==3'd4) ? full_at_sh
-    //                        : ((4'b1111 >> (4 - first)) << sh_l);
-    //assign w0_strb_l = need_two ? first_mask : lowN_at_sh;
-
-    // kann dadurch vereinfacht werden zu (todo: verify):
-    assign w0_strb_l = (first==3'd4) ? 4'b1111
-                            : ((4'b1111 >> (4 - first)) << sh_l);
-
-    // second-beat packet (if needed)
-    logic [31:0] w1_data_l = bank_word_q >> (8*first);
-    logic [3:0]  w1_strb_l = (second==3'd0) ? 4'b0000
-                          : (4'b1111 >> (4 - second));
 
     unique case (st_q)
       ST_IDLE: begin
@@ -610,11 +580,9 @@ module ibex_vector_unit #(
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       st_q         <= ST_IDLE;
-      //idx_q        <= '0; // already zeroed see the reset above
       bank_word_q  <= '0;
     end else begin
       st_q         <= st_d;
-      //idx_q        <= idx_d;
       bank_word_q  <= bank_word_d;
     end
   end
