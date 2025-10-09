@@ -79,9 +79,9 @@ module ibex_vector_unit #(
   logic [4:0] max_elems;
 
   // internal signals used for communication between the main control FSM and Load FSM
-  logic ld_start, ld_done, ld_fault;
+  logic ld_rq, ld_done, ld_fault;
   // internal signals used for communication between the main control FSM and Store FSM
-  logic st_start, st_done, st_fault;
+  logic st_rq, st_done, st_fault;
 
   // todo: should we combine all sequential processes into one always_ff block? until now 3 were used.
   always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -135,14 +135,15 @@ module ibex_vector_unit #(
     is_vsetvli_d = is_vsetvli_q;
     is_vle_d = is_vle_q;
     is_vse_d = is_vse_q;
+
     rs_data_d = rs_data_q
 
     // Defaults for next-state regs and LSU start pulse
     vl_d        = vl_q;
     sew_d       = sew_q;
     
-    ld_start   = 1'b0;
-    st_start   = 1'b0;
+    ld_rq   = 1'b0;
+    st_rq   = 1'b0;
 
     case (state_q)
       IDLE: begin
@@ -160,7 +161,7 @@ module ibex_vector_unit #(
           if (!(is_vsetvli_d || is_vle_d || is_vse_d)) begin
             // unsupported instruction -> trap
             state_d = TRAP;
-          end
+          // end
         end else begin
           // no new request: clear decode flags
           is_vsetvli_d = 1'b0;
@@ -193,14 +194,14 @@ module ibex_vector_unit #(
         end
         else if (is_vle_q) begin
           // ---- kick LSU micro-FSM ----
-          ld_start = (lsu_q == LSU_IDLE);  // single-cycle pulse when LSU idle
+          ld_rq = (lsu_q == LSU_IDLE);  // single-cycle pulse when LSU idle
           if (ld_done) begin
             if (ld_fault) state_d = TRAP;
             else state_d = DONE;
           end
         end
         else if (is_vse_q) begin
-          st_start = (st_q == ST_IDLE);       // one-cycle pulse to start
+          st_rq = (st_q == ST_IDLE);       // one-cycle pulse to start
           if (st_done) begin
             if (st_fault) state_d = TRAP;
             else state_d = DONE;
@@ -361,7 +362,7 @@ module ibex_vector_unit #(
     vrf_wr_bank  = byte_idx[3:2];
 
     unique case (lsu_q)
-      LSU_IDLE:  if (ld_start) begin
+      LSU_IDLE:  if (ld_rq) begin
         lsu_d = LSU_SETUP;
         idx_d = '0; // wichtig
       end
@@ -564,7 +565,7 @@ module ibex_vector_unit #(
 
     unique case (st_q)
       ST_IDLE: begin
-        if (st_start) begin
+        if (st_rq) begin
           idx_d = '0; // wichtig
           st_d  = ST_SETUP;
         end
