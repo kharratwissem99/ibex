@@ -35,7 +35,7 @@ module luv (
 
   // ---- LSU / VRF state ----
   typedef enum logic [3:0] {
-    LSU_IDLE, LSU_SETUP,
+    LSU_IDLE,
     LSU_REQ1, LSU_WAIT1,
     LSU_REQ2, LSU_WAIT2,
     LSU_WRITE,
