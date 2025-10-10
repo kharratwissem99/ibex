@@ -57,7 +57,7 @@ endif
 # https://sourceware.org/bugzilla/show_bug.cgi?id=19921
 # is widely available.
 %.vmem: %.bin
-	srec_cat $^ -binary -offset 0x0000 -byte-swap 4 -o $@ -vmem
+	/home/kharrat/Desktop/repos/ibex/srec_cat $^ -binary -offset 0x0000 -byte-swap 4 -o $@ -vmem
 
 %.bin: %.elf
 	$(OBJCOPY) -O binary $^ $@

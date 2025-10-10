@@ -10,6 +10,8 @@ fusesoc --cores-root=. run --tool=xcelium --target=sim \
   lowrisc:ibex:ibex_simple_system $(util/ibex_config.py small fusesoc_opts)
 
 ====================================================
-fusesoc --cores-root=. run --target=sim --tool=xcelium --setup --build lowrisc:ibex:ibex_simple_system --RV32E=0 --RV32M=ibex_pkg::RV32MFast --SRAMInitFile="/home/kharrat/Desktop/repos/ibex/hello_test.mem"
+fusesoc --cores-root=. run --target=sim --tool=xcelium --setup --build lowrisc:ibex:ibex_simple_system --RV32E=0 --RV32M=ibex_pkg::RV32MFast --SRAMInitFile="/home/kharrat/Desktop/repos/ibex/dummy.vmem"
 
 make run-gui
+
+/modules/cadence/XCELIUM/2403/tools/bin/xrun -q -f edalize_main.f    -defparam RV32E=0 -defparam ICache=0 -defparam ICacheScramble=0 -defparam ICacheECC=0 -defparam BranchTargetALU=0 -defparam WritebackStage=0 -defparam SecureIbex=0 -defparam BranchPredictor=0 -defparam DbgTriggerEn=0 -defparam PMPEnable=0 -defparam PMPGranularity=0 -defparam PMPNumRegions=4 -defparam MHPMCounterNum=0 -defparam MHPMCounterWidth=40 -defparam SRAMInitFile=/home/kharrat/Desktop/repos/ibex/dummy.vmem  -top ibex_simple_system -gui -access rwc

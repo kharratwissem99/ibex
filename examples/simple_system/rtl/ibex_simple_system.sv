@@ -18,6 +18,9 @@
   `define RegFile ibex_pkg::RegFileFF
 `endif
 
+`ifndef SRAMInitFile
+  `define SRAMInitFile "/home/kharrat/Desktop/repos/ibex/examples/sw/simple_system/hello_test/hello_test.vmem"
+`endif
 /**
  * Ibex simple system
  *
@@ -52,7 +55,7 @@ module ibex_simple_system (
   parameter bit                 DbgTriggerEn             = 1'b0;
   parameter bit                 ICacheECC                = 1'b0;
   parameter bit                 BranchPredictor          = 1'b0;
-  parameter                     SRAMInitFile             = "";
+  parameter                     SRAMInitFile             = `SRAMInitFile;
 
   logic clk_sys = 1'b0, rst_sys_n;
 
