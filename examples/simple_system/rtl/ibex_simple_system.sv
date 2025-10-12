@@ -46,7 +46,7 @@ module ibex_simple_system (
   parameter int unsigned        MHPMCounterNum           = 0;
   parameter int unsigned        MHPMCounterWidth         = 40;
   parameter bit                 RV32E                    = 1'b0;
-  parameter ibex_pkg::rv32m_e   RV32M                    = `RV32M;
+  parameter ibex_pkg::rv32m_e   RV32M                    = ibex_pkg::RV32MSingleCycle;
   parameter ibex_pkg::rv32b_e   RV32B                    = `RV32B;
   parameter ibex_pkg::regfile_e RegFile                  = `RegFile;
   parameter bit                 BranchTargetALU          = 1'b1;
