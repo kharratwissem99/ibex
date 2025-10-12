@@ -7,7 +7,7 @@
 // default. Other simulators don't take the detour via `define and can override the corresponding
 // parameters directly.
 `ifndef RV32M
-  `define RV32M ibex_pkg::RV32MFast
+  `define RV32M ibex_pkg::RV32MSingleCycle
 `endif
 
 `ifndef RV32B
@@ -49,12 +49,12 @@ module ibex_simple_system (
   parameter ibex_pkg::rv32m_e   RV32M                    = `RV32M;
   parameter ibex_pkg::rv32b_e   RV32B                    = `RV32B;
   parameter ibex_pkg::regfile_e RegFile                  = `RegFile;
-  parameter bit                 BranchTargetALU          = 1'b0;
-  parameter bit                 WritebackStage           = 1'b0;
+  parameter bit                 BranchTargetALU          = 1'b1;
+  parameter bit                 WritebackStage           = 1'b1;
   parameter bit                 ICache                   = 1'b0;
   parameter bit                 DbgTriggerEn             = 1'b0;
   parameter bit                 ICacheECC                = 1'b0;
-  parameter bit                 BranchPredictor          = 1'b0;
+  parameter bit                 BranchPredictor          = 1'b1;
   parameter                     SRAMInitFile             = `SRAMInitFile;
 
   logic clk_sys = 1'b0, rst_sys_n;
