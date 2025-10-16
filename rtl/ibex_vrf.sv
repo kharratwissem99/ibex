@@ -56,3 +56,18 @@ module ibex_vrf #(
 `endif
 
 endmodule
+
+// Initialization for simulation/testing
+`ifdef SIMULATION
+initial begin
+  // Initialize vector register v1 with test data
+  #100; // Wait for reset
+  mem[1][0] = 32'h12345678;  // Bank 0
+  mem[1][1] = 32'hABCDEF00;  // Bank 1  
+  mem[1][2] = 32'hDEADBEEF;  // Bank 2
+  mem[1][3] = 32'hCAFEBABE;  // Bank 3
+  
+  $display("VRF initialized: v1 = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", 
+           mem[1][3], mem[1][2], mem[1][1], mem[1][0]);
+end
+`endif
