@@ -13,7 +13,7 @@ module vector_store_unit (
   output logic         store_err_o,
   
   // interface to ibex_vrf
-  output logic         rd_en_o,            // Add read enable
+  // output logic         rd_en_o,            // Add read enable
   output logic [1:0]   rd_bank_o,
   input  logic [31:0]  rd_rdata_i,
 
@@ -43,13 +43,11 @@ module vector_store_unit (
   // Control signals
   logic store_err;
   logic last_req, last_valid;
-  logic all_grants_done_q, all_grants_done_d;
   
-  assign store_err = data_rvalid_i & data_err_i;
+  assign store_err = st_error_q;
   assign store_err_o = store_err;
-  assign busy_o = (st_state_q != ST_IDLE) || all_grants_done_q;
-  // st_done only when all grants AND all valids are received
-  assign st_done = all_grants_done_q && last_valid;
+  assign busy_o = (st_state_q != ST_IDLE);
+  assign st_done =  last_valid;
 
   // Address and data processing
   logic [31:0] data_addr;
@@ -96,45 +94,36 @@ module vector_store_unit (
   logic [1:0] valid_cnt_q, valid_cnt_d;
   
   assign rd_bank_o = gnt_cnt_q;
-  assign rd_en_o = (st_state_q != ST_IDLE) || st_req;
 
   // Grant and valid counters
   always_comb begin
     gnt_cnt_d = gnt_cnt_q;
     last_req = 1'b0;
-    all_grants_done_d = all_grants_done_q;
     
-    if (data_gnt_i && (st_state_q != ST_IDLE)) begin
+    if (data_gnt_i) begin
       if (gnt_cnt_q + 1 == anzahl_req) begin
         last_req = 1'b1;
-        all_grants_done_d = 1'b1; // Mark that all grants are done
         gnt_cnt_d = 2'd0; // Reset for next operation
       end else begin
         gnt_cnt_d = gnt_cnt_q + 1;
       end
     end
-    
-    if (st_req && (st_state_q == ST_IDLE)) begin
-      gnt_cnt_d = 2'd0; // Reset at start
-      all_grants_done_d = 1'b0; // Reset grants done flag
-    end
   end
 
+  logic st_error_q, st_error_d;
   always_comb begin
     valid_cnt_d = valid_cnt_q;
     last_valid = 1'b0;
+    st_error_d = st_error_q;
     
-    if (data_rvalid_i && (st_state_q != ST_IDLE || all_grants_done_q)) begin
+    if (data_rvalid_i) begin
+      if (data_err_i) st_error_d = 1;
       if (valid_cnt_q + 1 == anzahl_req) begin
         last_valid = 1'b1;
         valid_cnt_d = 2'd0; // Reset for next operation
       end else begin
         valid_cnt_d = valid_cnt_q + 1;
       end
-    end
-    
-    if (st_req && (st_state_q == ST_IDLE)) begin
-      valid_cnt_d = 2'd0; // Reset at start
     end
   end
 
@@ -152,41 +141,15 @@ module vector_store_unit (
     endcase
   end
 
-  // Last transfer mask (based on remaining bytes)
-  // assign remaining_bytes = total_bytes - (gnt_cnt_q << 2);
-  // always_comb begin
-  //   if (remaining_bytes >= 7'd4) begin
-  //     last_mask = 4'b1111;
-  //   end else begin
-  //     case (remaining_bytes[1:0])
-  //       2'b00: last_mask = 4'b0000; // Should not happen
-  //       2'b01: last_mask = 4'b0001;
-  //       2'b10: last_mask = 4'b0011;
-  //       2'b11: last_mask = 4'b0111;
-  //     endcase
-  //   end
-  // end
-
-  // // Current mask selection
-  // always_comb begin
-  //   if (gnt_cnt_q == 2'd0) begin
-  //     // First transfer
-  //     if (last_req) begin
-  //       current_mask = first_mask & last_mask;
-  //     end else begin
-  //       current_mask = first_mask;
-  //     end
-  //   end else if (last_req) begin
-  //     // Last transfer (but not first)
-  //     current_mask = last_mask;
-  //   end else begin
-  //     // Middle transfers
-  //     current_mask = 4'b1111;
-  //   end
-  // end
-
-  
-
+  always_comb begin
+    unique case (total_bytes[1:0])
+      2'b00:   last_mask =  4'b1111;
+      2'b01:   last_mask =  4'b0001;
+      2'b10:   last_mask =  4'b0011;
+      2'b11:   last_mask =  4'b0111;
+      default: last_mask =  4'b1111;
+    endcase // case (n[1:0])
+  end
 
   logic [31:0] last_rf_data_d, last_rf_data_q;
   // Data rotation for misaligned accesses
@@ -213,6 +176,7 @@ module vector_store_unit (
     addr_incr_req_o = 1'b0;
 
     last_rf_data_d = last_rf_data_q;
+    last_mask_d = last_mask_q;
 
     case (st_state_q)
       ST_IDLE: begin
@@ -221,7 +185,14 @@ module vector_store_unit (
           data_addr_o = data_addr_w_aligned;
           data_we_o = 1'b1;
           data_wdata_o = data_wdata;
-          data_be_o = current_mask;
+          if (last_req) begin
+            data_be_o = first_mask && last_mask;
+            last_mask_d = first_mask && last_mask;
+          end else begin
+            data_be_o = first_mask;
+            last_mask_d = first_mask;
+          end
+          // data_be_o = current_mask;
 
           last_rf_data_d = rd_rdata_i;
           
@@ -243,7 +214,7 @@ module vector_store_unit (
         data_addr_o = data_addr_w_aligned;
         data_we_o = 1'b1;
         data_wdata_o = data_wdata;
-        data_be_o = current_mask;
+        data_be_o = last_mask_q;
         
         if (data_gnt_i) begin
           if (last_req) begin
@@ -260,7 +231,14 @@ module vector_store_unit (
         data_addr_o = data_addr_w_aligned;
         data_we_o = 1'b1;
         data_wdata_o = data_wdata;
-        data_be_o = current_mask;
+        // data_be_o = current_mask;
+        if (last_req) begin
+          data_be_o = last_mask;
+          last_mask_d = last_mask;
+        end else begin
+          data_be_o = 4'b1111;
+          last_mask_d = 4'b1111;
+        end
         // Tell ID/EX stage to prepare next address (like normal LSU)
         addr_incr_req_o = 1'b1;
 
@@ -282,22 +260,21 @@ module vector_store_unit (
   // Sequential logic
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
+      st_error_q <= '0;
       st_state_q <= ST_IDLE;
       gnt_cnt_q <= '0;
       valid_cnt_q <= '0;
       last_rf_data_q <= '0;
       all_grants_done_q <= 1'b0;
+      last_mask_q <= '0;
     end else begin
+      st_error_q <= st_error_d;
       last_rf_data_q <= '0;
       st_state_q <= st_state_d;
       gnt_cnt_q <= gnt_cnt_d;
       valid_cnt_q <= valid_cnt_d;
       all_grants_done_q <= all_grants_done_d;
-      
-      // Clear all_grants_done when st_done is asserted
-      if (st_done) begin
-        all_grants_done_q <= 1'b0;
-      end
+      last_mask_q <= last_mask_d;
     end
   end
 
