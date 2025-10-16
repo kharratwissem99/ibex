@@ -43,6 +43,7 @@ module vector_store_unit (
   // Control signals
   logic store_err;
   logic last_req, last_valid;
+  logic [3:0] last_mask_q, last_mask_d;
   
   assign store_err = st_error_q;
   assign store_err_o = store_err;
@@ -100,13 +101,17 @@ module vector_store_unit (
     gnt_cnt_d = gnt_cnt_q;
     last_req = 1'b0;
     
-    if (data_gnt_i) begin
+    if (data_gnt_i && (st_state_q != ST_IDLE)) begin
       if (gnt_cnt_q + 1 == anzahl_req) begin
         last_req = 1'b1;
         gnt_cnt_d = 2'd0; // Reset for next operation
       end else begin
         gnt_cnt_d = gnt_cnt_q + 1;
       end
+    end
+    
+    if (st_req && (st_state_q == ST_IDLE)) begin
+      gnt_cnt_d = 2'd0; // Reset at start
     end
   end
 
@@ -117,13 +122,18 @@ module vector_store_unit (
     st_error_d = st_error_q;
     
     if (data_rvalid_i) begin
-      if (data_err_i) st_error_d = 1;
+      if (data_err_i) st_error_d = 1'b1;
       if (valid_cnt_q + 1 == anzahl_req) begin
         last_valid = 1'b1;
         valid_cnt_d = 2'd0; // Reset for next operation
       end else begin
         valid_cnt_d = valid_cnt_q + 1;
       end
+    end
+    
+    if (st_req && (st_state_q == ST_IDLE)) begin
+      valid_cnt_d = 2'd0; // Reset at start
+      st_error_d = 1'b0; // Reset error flag
     end
   end
 
@@ -186,8 +196,8 @@ module vector_store_unit (
           data_we_o = 1'b1;
           data_wdata_o = data_wdata;
           if (last_req) begin
-            data_be_o = first_mask && last_mask;
-            last_mask_d = first_mask && last_mask;
+            data_be_o = first_mask & last_mask;
+            last_mask_d = first_mask & last_mask;
           end else begin
             data_be_o = first_mask;
             last_mask_d = first_mask;
@@ -265,15 +275,13 @@ module vector_store_unit (
       gnt_cnt_q <= '0;
       valid_cnt_q <= '0;
       last_rf_data_q <= '0;
-      all_grants_done_q <= 1'b0;
       last_mask_q <= '0;
     end else begin
       st_error_q <= st_error_d;
-      last_rf_data_q <= '0;
+      last_rf_data_q <= last_rf_data_d;
       st_state_q <= st_state_d;
       gnt_cnt_q <= gnt_cnt_d;
       valid_cnt_q <= valid_cnt_d;
-      all_grants_done_q <= all_grants_done_d;
       last_mask_q <= last_mask_d;
     end
   end
