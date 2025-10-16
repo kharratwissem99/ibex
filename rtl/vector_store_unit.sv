@@ -44,6 +44,8 @@ module vector_store_unit (
   logic store_err;
   logic last_req, last_valid;
   logic [3:0] last_mask_q, last_mask_d;
+
+  logic st_error_q, st_error_d;
   
   assign store_err = st_error_q;
   assign store_err_o = store_err;
@@ -60,25 +62,25 @@ module vector_store_unit (
   assign data_addr_w_aligned = {data_addr[31:2], 2'b00};
 
   // Element size calculation
-  logic [1:0] EEW_BYTES;
+  logic [2:0] EEW_BYTES;
   logic [1:0] SHIFT_FAKTOR;
   
   always_comb begin
     case (request_type_i)
       3'b000: begin // SEW=8
-        EEW_BYTES = 2'd1;
+        EEW_BYTES = 3'd1;
         SHIFT_FAKTOR = 2'd0;
       end
       3'b101: begin // SEW=16
-        EEW_BYTES = 2'd2;
+        EEW_BYTES = 3'd2;
         SHIFT_FAKTOR = 2'd1;
       end
       3'b010: begin // SEW=32
-        EEW_BYTES = 2'd4;
+        EEW_BYTES = 3'd4;
         SHIFT_FAKTOR = 2'd2;
       end
       default: begin
-        EEW_BYTES = 2'd1;
+        EEW_BYTES = 3'd1;
         SHIFT_FAKTOR = 2'd0;
       end
     endcase
@@ -115,7 +117,6 @@ module vector_store_unit (
     end
   end
 
-  logic st_error_q, st_error_d;
   always_comb begin
     valid_cnt_d = valid_cnt_q;
     last_valid = 1'b0;
