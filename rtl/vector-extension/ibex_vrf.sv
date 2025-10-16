@@ -12,7 +12,7 @@ module ibex_vrf #(
   input  logic [3:0]      wr_wstrb_i,
 
   // Read: one 32-bit word (bank) (for stores/ALU later)
-  // input  logic            rd_en_i, // why should i enable it. i can read it directly
+  input  logic            rd_en_i,
   input  logic [4:0]      rd_vreg_i,
   input  logic [1:0]      rd_bank_i,
   output logic [31:0]     rd_rdata_o
