@@ -111,6 +111,7 @@ module ibex_id_stage #(
 
   // Interface to load store unit
   output logic                      lsu_req_o,
+  output logic                      vst_req_o, // to the vector LSU
   output logic                      lsu_we_o,
   output logic [1:0]                lsu_type_o,
   output logic                      lsu_sign_ext_o,
@@ -433,6 +434,8 @@ module ibex_id_stage #(
   // Decoder //
   /////////////
 
+  logic vst_req_dec;
+
   ibex_decoder #(
     .RV32E          (RV32E),
     .RV32M          (RV32M),
@@ -503,6 +506,7 @@ module ibex_id_stage #(
 
     // LSU
     .data_req_o           (lsu_req_dec),
+    .data_req_vs_o        (vst_req_dec),
     .data_we_o            (lsu_we),
     .data_type_o          (lsu_type),
     .data_sign_extension_o(lsu_sign_ext),
@@ -639,11 +643,15 @@ module ibex_id_stage #(
 
   assign multdiv_en_dec   = mult_en_dec | div_en_dec;
 
+  logic vst_req;
+
   assign lsu_req         = instr_executing ? data_req_allowed & lsu_req_dec  : 1'b0;
+  assign vst_req         = instr_executing ? data_req_allowed & vst_req_dec  : 1'b0;
   assign mult_en_id      = instr_executing ? mult_en_dec                     : 1'b0;
   assign div_en_id       = instr_executing ? div_en_dec                      : 1'b0;
 
   assign lsu_req_o               = lsu_req;
+  assign vst_req_o               = vst_req;
   assign lsu_we_o                = lsu_we;
   assign lsu_type_o              = lsu_type;
   assign lsu_sign_ext_o          = lsu_sign_ext;
@@ -794,7 +802,7 @@ module ibex_id_stage #(
       unique case (id_fsm_q)
         FIRST_CYCLE: begin
           unique case (1'b1)
-            lsu_req_dec: begin
+            lsu_req_dec | vst_req_dec: begin // todo: vst_req_dec is normally analog to lsu_req_dec
               if (!WritebackStage) begin
                 // LSU operation
                 id_fsm_d    = MULTI_CYCLE;
@@ -907,7 +915,7 @@ module ibex_id_stage #(
 
     logic instr_kill;
 
-    assign multicycle_done = lsu_req_dec ? ~stall_mem : ex_valid_i;
+    assign multicycle_done = (lsu_req_dec | vst_req_dec)? ~stall_mem : ex_valid_i; //todo:check
 
     // Is a memory access ongoing that isn't finishing this cycle
     assign outstanding_memory_access = (outstanding_load_wb_i | outstanding_store_wb_i) &
@@ -969,12 +977,12 @@ module ibex_id_stage #(
     // * There is a load/store request not being granted or which is unaligned and waiting to issue
     //   a second request (needs to stay in ID for the address calculation)
     assign stall_mem = instr_valid_i &
-                       (outstanding_memory_access | (lsu_req_dec & ~lsu_req_done_i));
+                       (outstanding_memory_access | ((lsu_req_dec | vst_req_dec)& ~lsu_req_done_i));
 
     // If we stall a load in ID for any reason, it must not make an LSU request
     // (otherwise we might issue two requests for the same instruction)
     `ASSERT(IbexStallMemNoRequest,
-      instr_valid_i & lsu_req_dec & ~instr_done |-> ~lsu_req_done_i)
+      instr_valid_i & (lsu_req_dec | vst_req_dec) & ~instr_done |-> ~lsu_req_done_i)
 
     assign rf_rd_a_wb_match = (rf_waddr_wb_i == rf_raddr_a_o) & |rf_raddr_a_o;
     assign rf_rd_b_wb_match = (rf_waddr_wb_i == rf_raddr_b_o) & |rf_raddr_b_o;
@@ -995,7 +1003,7 @@ module ibex_id_stage #(
 
     assign stall_ld_hz = outstanding_load_wb_i & (rf_rd_a_hz | rf_rd_b_hz);
 
-    assign instr_type_wb_o = ~lsu_req_dec ? WB_INSTR_OTHER :
+    assign instr_type_wb_o = ~(lsu_req_dec | vst_req_dec)? WB_INSTR_OTHER :
                               lsu_we      ? WB_INSTR_STORE :
                                             WB_INSTR_LOAD;
 
@@ -1013,13 +1021,13 @@ module ibex_id_stage #(
     assign expecting_store_resp_o = 1'b0;
   end else begin : gen_no_stall_mem
 
-    assign multicycle_done = lsu_req_dec ? lsu_resp_valid_i : ex_valid_i;
+    assign multicycle_done = (lsu_req_dec | vst_req_dec)? lsu_resp_valid_i : ex_valid_i;
 
     assign data_req_allowed = instr_first_cycle;
 
     // Without Writeback Stage always stall the first cycle of a load/store.
     // Then stall until it is complete
-    assign stall_mem = instr_valid_i & (lsu_req_dec & (~lsu_resp_valid_i | instr_first_cycle));
+    assign stall_mem = instr_valid_i & ((lsu_req_dec | vst_req_dec) & (~lsu_resp_valid_i | instr_first_cycle));
 
     // No load hazards without Writeback Stage
     assign stall_ld_hz   = 1'b0;
@@ -1043,8 +1051,8 @@ module ibex_id_stage #(
     // following. Note if the request isn't immediately accepted these signals will still assert.
     // However in this case the LSU won't signal a response as it's still waiting for the grant
     // (even if the external memory bus signals are glitched to generate a false response).
-    assign expecting_load_resp_o  = instr_valid_i & lsu_req_dec & ~instr_first_cycle & ~lsu_we;
-    assign expecting_store_resp_o = instr_valid_i & lsu_req_dec & ~instr_first_cycle &  lsu_we;
+    assign expecting_load_resp_o  = instr_valid_i & (lsu_req_dec | vst_req_dec) & ~instr_first_cycle & ~lsu_we;
+    assign expecting_store_resp_o = instr_valid_i & (lsu_req_dec | vst_req_dec) & ~instr_first_cycle &  lsu_we;
 
     // Unused Writeback stage only IO & wiring
     // Assign inputs and internal wiring to unused signals to satisfy lint checks
@@ -1070,7 +1078,7 @@ module ibex_id_stage #(
     assign instr_type_wb_o = WB_INSTR_OTHER;
     assign stall_wb        = 1'b0;
 
-    assign perf_dside_wait_o = instr_executing & lsu_req_dec & ~lsu_resp_valid_i;
+    assign perf_dside_wait_o = instr_executing & (lsu_req_dec | vst_req_dec) & ~lsu_resp_valid_i;
 
     assign instr_id_done_o = instr_done;
   end
@@ -1138,7 +1146,7 @@ module ibex_id_stage #(
 
   // Multicycle enable signals must be unique.
   `ASSERT(IbexMulticycleEnableUnique,
-      $onehot0({lsu_req_dec, multdiv_en_dec, branch_in_dec, jump_in_dec}))
+      $onehot0({(lsu_req_dec | vst_req_dec), multdiv_en_dec, branch_in_dec, jump_in_dec}))
 
   // Duplicated instruction flops must match
   // === as DV environment can produce instructions with Xs in, so must use precise match that

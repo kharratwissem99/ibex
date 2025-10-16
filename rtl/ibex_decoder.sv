@@ -87,6 +87,7 @@ module ibex_decoder #(
 
   // LSU
   output logic                 data_req_o,            // start transaction to data memory
+  output logic                 data_req_vs_o,            // start transaction to data memory
   output logic                 data_we_o,             // write enable
   output logic [1:0]           data_type_o,           // size of transaction: byte, half
                                                       // word or word
@@ -226,7 +227,8 @@ module ibex_decoder #(
     data_we_o             = 1'b0;
     data_type_o           = 2'b00;
     data_sign_extension_o = 1'b0;
-    data_req_o            = 1'b0;
+    data_req_o            = 1'b0; // for scalar LSU
+    data_req_vs_o         = 1'b0; // trigger vector LSU
 
     illegal_insn          = 1'b0;
     ebrk_insn_o           = 1'b0;
@@ -640,6 +642,33 @@ module ibex_decoder #(
         end
 
       end
+
+      ////////////////////
+      // Vector Store   //
+      ////////////////////
+      OPCODE_VECTOR: begin
+        // Only handle vector store instructions (vse8.v, vse16.v, vse32.v)
+        // Unit-stride vector stores have mop[2:0] = 000, so bits[28:26] = 000
+        if (instr[14:12] == 3'b000 && instr[31:20] == 12'b0) begin // vse8.v
+          rf_ren_a_o         = 1'b1;  // Base address from rs1 todo: check maybe unused in our configuration
+          data_req_vs_o      = 1'b1;  // Request memory access // note: we can't use the same data_req_o because it will trigger the scalar lsu. it can be used analog to data_req_o to trigger the vector LSU
+          data_we_o          = 1'b1;  // Write enable
+          data_type_o        = 2'b10; // Byte access (like sb) // todo: for it is ok but in the future we will connct this directly to vector_store_unit. see core 
+        end else if (instr[14:12] == 3'b101 && instr[31:20] == 12'b0) begin // vse16.v  
+          rf_ren_a_o         = 1'b1;
+          data_req_vs_o      = 1'b1;
+          data_we_o          = 1'b1;
+          data_type_o        = 2'b01; // Half-word access (like sh)
+        end else if (instr[14:12] == 3'b110 && instr[31:20] == 12'b0) begin // vse32.v
+          rf_ren_a_o         = 1'b1;
+          data_req_vs_o      = 1'b1;  
+          data_we_o          = 1'b1;
+          data_type_o        = 2'b00; // Word access (like sw)
+        end else begin
+          illegal_insn = 1'b1; // Unsupported vector instruction
+        end
+      end
+
       default: begin
         illegal_insn = 1'b1;
       end
@@ -658,6 +687,7 @@ module ibex_decoder #(
     if (illegal_insn) begin
       rf_we           = 1'b0;
       data_req_o      = 1'b0;
+      data_req_vs_o   = 1'b0;
       data_we_o       = 1'b0;
       jump_in_dec_o   = 1'b0;
       jump_set_o      = 1'b0;

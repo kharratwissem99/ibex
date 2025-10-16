@@ -229,6 +229,35 @@ module ibex_core import ibex_pkg::*; #(
   logic        lsu_addr_incr_req;
   logic [31:0] lsu_addr_last;
 
+  // Vector Store Unit signals
+  logic        vsu_addr_incr_req;
+  logic        vsu_st_req;
+  logic        vsu_st_done;
+  logic        vsu_store_err;
+  logic        vsu_busy;
+  logic        vector_store_req;  // Generated from decoder
+  
+  // LSU memory interface signals (before mux)
+  logic [31:0] lsu_data_addr;
+  logic        lsu_data_we;
+  logic [3:0]  lsu_data_be;
+  logic [31:0] lsu_data_wdata;
+  
+  // VSU memory interface signals
+  logic        vsu_data_req;
+  logic [31:0] vsu_data_addr;
+  logic        vsu_data_we;
+  logic [3:0]  vsu_data_be;
+  logic [31:0] vsu_data_wdata;
+
+  logic lsu_addr_incr_req_shared;
+  
+  // Vector Register File signals
+  logic [1:0]  vrf_rd_bank;
+  logic [31:0] vrf_rd_rdata;
+  logic        vrf_rd_en;
+  logic [4:0]  vrf_rd_vreg;
+
   // Jump and branch target and decision (EX->IF)
   logic [31:0] branch_target_ex;
   logic        branch_decision;
@@ -411,7 +440,7 @@ module ibex_core import ibex_pkg::*; #(
     end
   end else begin : g_core_busy_non_secure
     // For non secure Ibex, synthesis is allowed to optimize core_busy_o.
-    assign core_busy_o = (ctrl_busy || if_busy || lsu_busy) ? IbexMuBiOn : IbexMuBiOff;
+    assign core_busy_o = (ctrl_busy || if_busy || (lsu_busy | vsu_busy)) ? IbexMuBiOn : IbexMuBiOff;
   end
 
   //////////////
@@ -542,6 +571,8 @@ module ibex_core import ibex_pkg::*; #(
   // ID stage //
   //////////////
 
+  logic vst_req;
+
   ibex_id_stage #(
     .RV32E          (RV32E),
     .RV32M          (RV32M),
@@ -634,13 +665,14 @@ module ibex_core import ibex_pkg::*; #(
 
     // LSU
     .lsu_req_o     (lsu_req),  // to load store unit
+    .vst_req_o     (vst_req),  // to load store unit
     .lsu_we_o      (lsu_we),  // to load store unit
     .lsu_type_o    (lsu_type),  // to load store unit
     .lsu_sign_ext_o(lsu_sign_ext),  // to load store unit
     .lsu_wdata_o   (lsu_wdata),  // to load store unit
-    .lsu_req_done_i(lsu_req_done),  // from load store unit
+    .lsu_req_done_i(lsu_req_done | vsu_st_done),  // from load store unit
 
-    .lsu_addr_incr_req_i(lsu_addr_incr_req),
+    .lsu_addr_incr_req_i(lsu_addr_incr_req_shared),
     .lsu_addr_last_i    (lsu_addr_last),
 
     .lsu_load_err_i           (lsu_load_err),
@@ -754,11 +786,30 @@ module ibex_core import ibex_pkg::*; #(
     .ex_valid_o(ex_valid)
   );
 
+  //////////////////////////////
+  // Vector Store Logic       //
+  //////////////////////////////
+  
+  // Detect vector store instructions from decoder
+  // assign vector_store_req = (instr_rdata_id[6:0] == OPCODE_VECTOR) && 
+  //                          (instr_rdata_id[31:26] == 6'b000000) &&  // Unit-stride VSE (mop=000)
+  //                          (instr_rdata_id[14:12] inside {3'b000, 3'b101, 3'b110}) && // vse8, vse16, vse32
+  //                          instr_valid_id && 
+  //                          !illegal_insn_id;
+
+  // Generate vector store request when LSU would normally be used for vector instructions
+  // assign vsu_st_req = vector_store_req && lsu_req; // todo: No, we can't use the same signal
+  
+  // Set vector register to read (vs3 field = instr[24:20])
+  assign vrf_rd_vreg = instr_rdata_id[11:7]; // for vector register instruction unlike the the scalar store
+  // assign vrf_rd_en = vsu_st_req || vsu_busy;
+  assign lsu_addr_incr_req_shared = lsu_addr_incr_req || vsu_addr_incr_req; //todo: es ist for now ok because vector store unit and scalar lsu will not work together 
+
   /////////////////////
   // Load/store unit //
   /////////////////////
 
-  assign data_req_o   = data_req_out & ~pmp_req_err[PMP_D];
+  // assign data_req_o   = data_req_out & ~pmp_req_err[PMP_D]; todo: check commented out siehe unten
   assign lsu_resp_err = lsu_load_err | lsu_store_err;
 
   ibex_load_store_unit #(
@@ -775,10 +826,10 @@ module ibex_core import ibex_pkg::*; #(
     .data_bus_err_i(data_err_i),
     .data_pmp_err_i(pmp_req_err[PMP_D]),
 
-    .data_addr_o      (data_addr_o),
-    .data_we_o        (data_we_o),
-    .data_be_o        (data_be_o),
-    .data_wdata_o     (data_wdata_o),
+    .data_addr_o      (lsu_data_addr),
+    .data_we_o        (lsu_data_we),
+    .data_be_o        (lsu_data_be),
+    .data_wdata_o     (lsu_data_wdata),
     .data_rdata_i     (data_rdata_i),
 
     // signals to/from ID/EX stage
@@ -811,6 +862,97 @@ module ibex_core import ibex_pkg::*; #(
     .perf_load_o (perf_load),
     .perf_store_o(perf_store)
   );
+
+  ///////////////////////////////
+  // Vector Register File      //
+  ///////////////////////////////
+
+  ibex_vrf #(
+    .NREGS(32)
+  ) vector_register_file_i (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    
+    // Write interface (not connected for now, would be used by vector load instructions)
+    .wr_en_i(1'b0),
+    .wr_vreg_i(5'b0),
+    .wr_bank_i(2'b0),
+    .wr_wdata_i(32'b0),
+    .wr_wstrb_i(4'b0),
+    
+    // Read interface for vector store unit
+    .rd_en_i(1'b1), // todo: for now always set to 1
+    .rd_vreg_i(vrf_rd_vreg),
+    .rd_bank_i(vrf_rd_bank),
+    .rd_rdata_o(vrf_rd_rdata)
+  );
+
+  ///////////////////////////////
+  // Vector Store Unit         //
+  ///////////////////////////////
+
+  vector_store_unit vector_store_unit_i (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    
+    .adder_result_ex_i(alu_adder_result_ex),
+    .vl_i(5'b00100),  // Hard-coded VL=4 for testing
+    .request_type_i(lsu_type[1:0] == 2'b10 ? 3'b000 :   // sb -> SEW=8
+                    lsu_type[1:0] == 2'b01 ? 3'b101 :   // sh -> SEW=16
+                    lsu_type[1:0] == 2'b00 ? 3'b010 :   // sw -> SEW=32
+                    3'b000),                             // default SEW=8
+    
+    .addr_incr_req_o(vsu_addr_incr_req), // Todo: Connect this signal
+    
+    .st_req(vst_req),
+    .st_done(vsu_st_done),
+    .store_err_o(vsu_store_err),
+    
+    // VRF interface
+    .rd_bank_o(vrf_rd_bank),
+    .rd_rdata_i(vrf_rd_rdata),
+    
+    // Memory interface (connected to mux)
+    .data_req_o(vsu_data_req),
+    .data_addr_o(vsu_data_addr),  
+    .data_we_o(vsu_data_we),
+    .data_be_o(vsu_data_be),
+    .data_wdata_o(vsu_data_wdata),
+    .data_gnt_i(data_gnt_i),
+    .data_rvalid_i(data_rvalid_i),
+    .data_err_i(data_err_i),
+    
+    .busy_o(vsu_busy)
+  );
+
+  //////////////////////////////
+  // Memory Interface Mux     //
+  //////////////////////////////
+  
+  // Mux between LSU and VSU for memory interface
+  // LSU has priority when scalar store is active
+  logic use_lsu_mem;
+  assign use_lsu_mem = ~data_req_out; // lsu have always the priority when asked
+  
+  // Muxed memory outputs
+  logic        data_req_muxed;
+  logic [31:0] data_addr_muxed;
+  logic        data_we_muxed;
+  logic [3:0]  data_be_muxed;
+  logic [31:0] data_wdata_muxed;
+  
+  assign data_req_muxed   = use_lsu_mem ? vsu_data_req   : data_req_out;
+  assign data_addr_muxed  = use_lsu_mem ? vsu_data_addr  : lsu_data_addr;
+  assign data_we_muxed    = use_lsu_mem ? vsu_data_we    : lsu_data_we;
+  assign data_be_muxed    = use_lsu_mem ? vsu_data_be    : lsu_data_be;
+  assign data_wdata_muxed = use_lsu_mem ? vsu_data_wdata : lsu_data_wdata;
+  
+  // Override core memory outputs with muxed signals
+  assign data_req_o   = data_req_muxed & ~pmp_req_err[PMP_D];
+  assign data_addr_o  = data_addr_muxed;
+  assign data_we_o    = data_we_muxed;
+  assign data_be_o    = data_be_muxed;
+  assign data_wdata_o = data_wdata_muxed;
 
   ibex_wb_stage #(
     .ResetAll         (ResetAll),
@@ -868,7 +1010,7 @@ module ibex_core import ibex_pkg::*; #(
     // For non-secure configurations trust the bus protocol is being followed and we'll only ever
     // see a response if we have an outstanding request.
     assign lsu_load_err  = lsu_load_err_raw;
-    assign lsu_store_err = lsu_store_err_raw;
+    assign lsu_store_err = lsu_store_err_raw | vsu_store_err; // todo: use only here because we will not use secureIbex with v extension
     assign rf_we_lsu     = lsu_rdata_valid;
 
     // expected_load_resp_id/expected_store_resp_id signals are only used to guard against false
