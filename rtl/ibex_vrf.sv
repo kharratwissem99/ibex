@@ -37,10 +37,19 @@ module ibex_vrf #(
   end
 
   // read (registered or combo; here registered for timing cleanliness)
-  always_ff @(posedge clk_i) begin
+  // always_ff @(posedge clk_i) begin
+  //   if (rd_en_i) begin
+  //     rd_rdata_o <= mem[rd_vreg_i][rd_bank_i];
+  //   end
+  // end
+  // changed to combo
+  always_comb begin
     if (rd_en_i) begin
       rd_rdata_o <= mem[rd_vreg_i][rd_bank_i];
     end
+    else begin
+      rd_rdata_o <= 32'b0;
+    end 
   end
 
 `ifdef VERIF_VRF_PEEK
