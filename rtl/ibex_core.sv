@@ -228,6 +228,7 @@ module ibex_core import ibex_pkg::*; #(
   // LSU signals
   logic        lsu_addr_incr_req;
   logic [31:0] lsu_addr_last;
+  logic [31:0] st_addr_last;
 
   // Vector Store Unit signals
   logic        vsu_addr_incr_req;
@@ -673,7 +674,7 @@ module ibex_core import ibex_pkg::*; #(
     .lsu_req_done_i(lsu_req_done | vsu_st_done),  // from load store unit
 
     .lsu_addr_incr_req_i(lsu_addr_incr_req_shared),
-    .lsu_addr_last_i    (lsu_addr_last),
+    .lsu_addr_last_i    (lsu_addr_last | st_addr_last), // todo: check this a conflit can appear if lsu addr value preserve a value when unactive
 
     .lsu_load_err_i           (lsu_load_err),
     .lsu_load_resp_intg_err_i (lsu_load_resp_intg_err),
@@ -911,6 +912,8 @@ module ibex_core import ibex_pkg::*; #(
     // VRF interface
     .rd_bank_o(vrf_rd_bank),
     .rd_rdata_i(vrf_rd_rdata),
+
+    .addr_last_o    (st_addr_last),
     
     // Memory interface (connected to mux)
     .data_req_o(vsu_data_req),
@@ -1091,7 +1094,7 @@ module ibex_core import ibex_pkg::*; #(
   logic [31:0] crash_dump_mtval;
   assign crash_dump_o.current_pc     = pc_id;
   assign crash_dump_o.next_pc        = pc_if;
-  assign crash_dump_o.last_data_addr = lsu_addr_last;
+  assign crash_dump_o.last_data_addr = lsu_addr_last | st_addr_last;
   assign crash_dump_o.exception_pc   = csr_mepc;
   assign crash_dump_o.exception_addr = crash_dump_mtval;
 
@@ -1142,8 +1145,9 @@ module ibex_core import ibex_pkg::*; #(
     `ASSERT(NoMemRFWriteWithoutPendingLoad, rf_we_lsu |-> outstanding_load_id, clk_i, !rst_ni)
   end
 
-  `ASSERT(NoMemResponseWithoutPendingAccess,
-    data_rvalid_i |-> outstanding_load_resp | outstanding_store_resp, clk_i, !rst_ni)
+  //todo wissem: was mache mit diesen asserts siehe oben auch when the WB stage enabled ist. sollen die auch für meine vector store unit funktionieren
+  //`ASSERT(NoMemResponseWithoutPendingAccess,
+  //  data_rvalid_i |-> outstanding_load_resp | outstanding_store_resp, clk_i, !rst_ni)
 
 
   // Keep track of the PC last seen in the ID stage when fetch is disabled

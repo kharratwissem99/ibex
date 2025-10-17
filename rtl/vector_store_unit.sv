@@ -11,6 +11,8 @@ module vector_store_unit (
   input  logic         st_req,
   output logic         st_done,
   output logic         store_err_o,
+
+  output logic [31:0]  addr_last_o,
   
   // interface to ibex_vrf
   // output logic         rd_en_o,            // Add read enable
@@ -30,7 +32,7 @@ module vector_store_unit (
 
   output logic         busy_o
 );
-
+  //======checked section==========
   // State machine and control signals
   typedef enum logic [1:0] {
     ST_IDLE,
@@ -40,22 +42,11 @@ module vector_store_unit (
   
   st_state_e st_state_q, st_state_d;
 
-  // Control signals
-  logic store_err;
-  logic last_req, last_valid;
-  logic [3:0] last_mask_q, last_mask_d;
-
-  logic st_error_q, st_error_d;
-  
-  assign store_err = st_error_q;
-  assign store_err_o = store_err;
-  assign busy_o = (st_state_q != ST_IDLE);
-  assign st_done =  last_valid;
-
   // Address and data processing
   logic [31:0] data_addr;
   logic [31:0] data_addr_w_aligned;
   logic [1:0]  data_offset;
+  logic         addr_update;
   
   assign data_addr = adder_result_ex_i;
   assign data_offset = data_addr[1:0];
@@ -93,6 +84,40 @@ module vector_store_unit (
   assign total_bytes = data_offset + (vl_i << SHIFT_FAKTOR);
   assign anzahl_req = total_bytes[6:2] + |total_bytes[1:0]; // Ceiling division by 4
 
+  logic [31:0]  addr_last_q, addr_last_d;
+
+  // output to ID stage: mtval + AGU for misaligned transactions
+  assign addr_last_o   = addr_last_q;
+
+  // Store last address for mtval + AGU for misaligned transactions.  Do not update in case of
+  // errors, mtval needs the (first) failing address.  Where an aligned access or the first half of
+  // a misaligned access sees an error provide the calculated access address. For the second half of
+  // a misaligned access provide the word aligned address of the second half.
+  assign addr_last_d = addr_incr_req_o ? data_addr_w_aligned : data_addr;
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      addr_last_q <= '0;
+    end else if (addr_update) begin
+      addr_last_q <= addr_last_d;
+    end
+  end
+
+  //============end checked section==============
+  // Control signals
+  logic store_err;
+  logic last_req, last_valid;
+  logic [3:0] last_mask_q, last_mask_d;
+
+  logic st_error_q, st_error_d;
+  
+  assign store_err = st_error_q;
+  assign store_err_o = store_err;
+  assign busy_o = (st_state_q != ST_IDLE);
+
+  // (lsu_req_i | (ls_fsm_cs != IDLE)) & (ls_fsm_ns == IDLE);
+  assign st_done =  last_req; // give back done when the last request is accepted todo:(or issued??)
+
   logic [1:0] gnt_cnt_q, gnt_cnt_d;
   logic [1:0] valid_cnt_q, valid_cnt_d;
   
@@ -103,7 +128,7 @@ module vector_store_unit (
     gnt_cnt_d = gnt_cnt_q;
     last_req = 1'b0;
     
-    if (data_gnt_i && (st_state_q != ST_IDLE)) begin
+    if (data_gnt_i && ((st_state_q != ST_IDLE) || st_req)) begin // todo: blockieren, dass data_gnt incrementiert wird, es soll nicht incrementiert werden, wenn die vector store unit unactiv ist
       if (gnt_cnt_q + 1 == anzahl_req) begin
         last_req = 1'b1;
         gnt_cnt_d = 2'd0; // Reset for next operation
@@ -112,9 +137,10 @@ module vector_store_unit (
       end
     end
     
-    if (st_req && (st_state_q == ST_IDLE)) begin
-      gnt_cnt_d = 2'd0; // Reset at start
-    end
+    // todo: Es ist vielleicht nutzlos. Nur wenn wir einen Abbruch machen, können wir das brauchen.
+    //if (st_req && (st_state_q == ST_IDLE)) begin
+    //  gnt_cnt_d = 2'd0; // Reset at start
+    //end
   end
 
   always_comb begin
@@ -176,6 +202,8 @@ module vector_store_unit (
   // Main state machine
   always_comb begin
     st_state_d = st_state_q;
+
+    addr_update         = 1'b0;
     
     // Memory interface defaults
     data_req_o = 1'b0;
@@ -208,6 +236,7 @@ module vector_store_unit (
           last_rf_data_d = rd_rdata_i;
           
           if (data_gnt_i) begin
+            addr_update         = 1'b1;
             if (last_req) begin
               st_state_d = ST_IDLE; // Single transfer complete
             end else begin
