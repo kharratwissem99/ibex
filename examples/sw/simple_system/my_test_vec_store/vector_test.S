@@ -6,6 +6,19 @@
 main:
     # Initialize base address for stores
     la a0, data_section
+
+    # =============================================================================
+    # SCALAR STORE REFERENCES (for comparison)
+    # =============================================================================
+    
+    # Test normal aligned scalar store (32-bit)
+    li t0, 0x12345678       # Load test data
+    sw t0, 0(a0)            # Store word at aligned address
+    
+    # Test misaligned scalar store (32-bit)
+    li t1, 0xABCDEF00       # Load different test data  
+    addi a1, a0, 1          # Misaligned address (base + 1)
+    sw t1, 0(a1)            # Store word at misaligned address
     
     # Test VSE8.V instruction (should be decoded as vector store)
     # Encoding: vse8.v v1, (a0)
