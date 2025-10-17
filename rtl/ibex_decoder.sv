@@ -828,6 +828,21 @@ module ibex_decoder #(
         imm_b_mux_sel_o     = IMM_B_I;
       end
 
+      ////////////////////
+      // Vector Store   //
+      ////////////////////
+      OPCODE_VECTOR: begin
+        alu_op_a_mux_sel_o = OP_A_REG_A;
+        alu_op_b_mux_sel_o = OP_B_REG_B;
+        alu_operator_o     = ALU_ADD;
+
+        // if (!instr_alu[14]) begin
+        //   // offset from immediate
+        //   imm_b_mux_sel_o     = IMM_B_S;
+        //   alu_op_b_mux_sel_o  = OP_B_IMM;
+        // end
+      end
+
       /////////
       // ALU //
       /////////
