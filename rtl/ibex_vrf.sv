@@ -65,15 +65,52 @@ module ibex_vrf #(
 `endif
 
 initial begin
-  // Initialize vector register v1 with test data
+  // Initialize vector registers with distinctive test data
   #100; // Wait for reset
+  
+  // v1: Original test pattern
   mem[1][0] = 32'h12345678;  // Bank 0
   mem[1][1] = 32'hABCDEF00;  // Bank 1  
   mem[1][2] = 32'hDEADBEEF;  // Bank 2
   mem[1][3] = 32'hCAFEBABE;  // Bank 3
   
-  $display("VRF initialized: v1 = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", 
-           mem[1][3], mem[1][2], mem[1][1], mem[1][0]);
+  // v2: Incremented pattern
+  mem[2][0] = 32'h23456789;  // Bank 0
+  mem[2][1] = 32'hBCDEF011;  // Bank 1
+  mem[2][2] = 32'hEADBEEF0;  // Bank 2
+  mem[2][3] = 32'hAFEBABEC;  // Bank 3
+  
+  // v3: Rotated pattern  
+  mem[3][0] = 32'h3456789A;  // Bank 0
+  mem[3][1] = 32'hCDEF0122;  // Bank 1
+  mem[3][2] = 32'hADBEEF01;  // Bank 2
+  mem[3][3] = 32'hFEBABECA;  // Bank 3
+  
+  // v4: Inverted pattern
+  mem[4][0] = 32'hEDCBA987;  // Bank 0
+  mem[4][1] = 32'h543210FF;  // Bank 1
+  mem[4][2] = 32'h21524110;  // Bank 2
+  mem[4][3] = 32'h35014543;  // Bank 3
+  
+  // v5: Alternating pattern
+  mem[5][0] = 32'hAAAA5555;  // Bank 0
+  mem[5][1] = 32'h5555AAAA;  // Bank 1
+  mem[5][2] = 32'hAAAA5555;  // Bank 2
+  mem[5][3] = 32'h5555AAAA;  // Bank 3
+  
+  // v31: Maximum register with special pattern
+  mem[31][0] = 32'hFFFFFFFF; // Bank 0 - all ones
+  mem[31][1] = 32'h00000000; // Bank 1 - all zeros
+  mem[31][2] = 32'hF0F0F0F0; // Bank 2 - alternating nibbles
+  mem[31][3] = 32'h0F0F0F0F; // Bank 3 - alternating nibbles
+  
+  $display("VRF initialized:");
+  $display("  v1  = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", mem[1][3], mem[1][2], mem[1][1], mem[1][0]);
+  $display("  v2  = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", mem[2][3], mem[2][2], mem[2][1], mem[2][0]);
+  $display("  v3  = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", mem[3][3], mem[3][2], mem[3][1], mem[3][0]);
+  $display("  v4  = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", mem[4][3], mem[4][2], mem[4][1], mem[4][0]);
+  $display("  v5  = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", mem[5][3], mem[5][2], mem[5][1], mem[5][0]);
+  $display("  v31 = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", mem[31][3], mem[31][2], mem[31][1], mem[31][0]);
 end
 
 endmodule
