@@ -47,6 +47,8 @@ module ibex_id_stage #(
   input  logic                      instr_exec_i,
   output logic                      icache_inval_o,
 
+  output logic                     lsu_mux_o,
+
   // Jumps and branches
   input  logic                      branch_decision_i,
 
@@ -461,6 +463,8 @@ module ibex_id_stage #(
     .instr_rdata_i      (instr_rdata_i),
     .instr_rdata_alu_i  (instr_rdata_alu_i),
     .illegal_c_insn_i   (illegal_c_insn_i),
+
+    .lsu_mux_o(lsu_mux_o),
 
     // immediates
     .imm_a_mux_sel_o(imm_a_mux_sel),

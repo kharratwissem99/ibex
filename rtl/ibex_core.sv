@@ -226,6 +226,7 @@ module ibex_core import ibex_pkg::*; #(
   logic        expecting_store_resp_id;
 
   // LSU signals
+  logic [31:0] lsu_addr_last_shared;
   logic        lsu_addr_incr_req;
   logic [31:0] lsu_addr_last;
   logic [31:0] st_addr_last;
@@ -409,6 +410,8 @@ module ibex_core import ibex_pkg::*; #(
   logic        perf_load;
   logic        perf_store;
 
+  logic lsu_mux;
+
   // for RVFI
   logic        illegal_insn_id, unused_illegal_insn_id; // ID stage sees an illegal instruction
 
@@ -573,6 +576,7 @@ module ibex_core import ibex_pkg::*; #(
   //////////////
 
   logic vst_req;
+  logic lsu_resp_valid_shared;
 
   ibex_id_stage #(
     .RV32E          (RV32E),
@@ -624,7 +628,8 @@ module ibex_core import ibex_pkg::*; #(
 
     // Stalls
     .ex_valid_i      (ex_valid),
-    .lsu_resp_valid_i(lsu_resp_valid),
+    .lsu_resp_valid_i(lsu_resp_valid_shared),
+    .lsu_mux_o(lsu_mux),
 
     .alu_operator_ex_o (alu_operator_ex),
     .alu_operand_a_ex_o(alu_operand_a_ex),
@@ -674,7 +679,7 @@ module ibex_core import ibex_pkg::*; #(
     .lsu_req_done_i(lsu_req_done | vsu_st_done),  // from load store unit
 
     .lsu_addr_incr_req_i(lsu_addr_incr_req_shared),
-    .lsu_addr_last_i    (lsu_addr_last | st_addr_last), // todo: check this a conflit can appear if lsu addr value preserve a value when unactive
+    .lsu_addr_last_i    (lsu_addr_last_shared), // todo: check this a conflit can appear if lsu addr value preserve a value when unactive todo: make changes
 
     .lsu_load_err_i           (lsu_load_err),
     .lsu_load_resp_intg_err_i (lsu_load_resp_intg_err),
@@ -742,6 +747,16 @@ module ibex_core import ibex_pkg::*; #(
   // for RVFI only
   assign unused_illegal_insn_id = illegal_insn_id;
 
+  logic st_resp_valid;
+  always_comb begin
+    if (lsu_mux) begin
+      lsu_resp_valid_shared = st_resp_valid;
+    end
+    else begin
+      lsu_resp_valid_shared = lsu_resp_valid;
+    end
+  end 
+
   ibex_ex_block #(
     .RV32M          (RV32M),
     .RV32B          (RV32B),
@@ -805,6 +820,11 @@ module ibex_core import ibex_pkg::*; #(
   assign vrf_rd_vreg = instr_rdata_id[11:7]; // for vector register instruction unlike the the scalar store
   // assign vrf_rd_en = vsu_st_req || vsu_busy;
   assign lsu_addr_incr_req_shared = lsu_addr_incr_req || vsu_addr_incr_req; //todo: es ist for now ok because vector store unit and scalar lsu will not work together 
+
+  always_comb begin
+    if (lsu_addr_incr_req) lsu_addr_last_shared = lsu_addr_last;
+    else lsu_addr_last_shared = st_addr_last;
+  end
 
   /////////////////////
   // Load/store unit //
@@ -914,6 +934,8 @@ module ibex_core import ibex_pkg::*; #(
     .rd_rdata_i(vrf_rd_rdata),
 
     .addr_last_o    (st_addr_last),
+
+    .st_resp_valid_o(st_resp_valid),
     
     // Memory interface (connected to mux)
     .data_req_o(vsu_data_req),
@@ -1094,7 +1116,7 @@ module ibex_core import ibex_pkg::*; #(
   logic [31:0] crash_dump_mtval;
   assign crash_dump_o.current_pc     = pc_id;
   assign crash_dump_o.next_pc        = pc_if;
-  assign crash_dump_o.last_data_addr = lsu_addr_last | st_addr_last;
+  assign crash_dump_o.last_data_addr = lsu_addr_last;
   assign crash_dump_o.exception_pc   = csr_mepc;
   assign crash_dump_o.exception_addr = crash_dump_mtval;
 

@@ -13,6 +13,8 @@ module vector_store_unit (
   output logic         store_err_o,
 
   output logic [31:0]  addr_last_o,
+
+  output logic         st_resp_valid_o,     // LSU has response from transaction -> to ID/EX // this is important for stalling the memory
   
   // interface to ibex_vrf
   // output logic         rd_en_o,            // Add read enable
@@ -32,6 +34,8 @@ module vector_store_unit (
 
   output logic         busy_o
 );
+
+  //assign st_resp_valid_o   = (data_rvalid_i | pmp_err_q) & (ls_fsm_cs == IDLE);
   //======checked section==========
   // State machine and control signals
   typedef enum logic [1:0] {
@@ -89,16 +93,25 @@ module vector_store_unit (
   // output to ID stage: mtval + AGU for misaligned transactions
   assign addr_last_o   = addr_last_q;
 
+  // TODO: later
   // Store last address for mtval + AGU for misaligned transactions.  Do not update in case of
   // errors, mtval needs the (first) failing address.  Where an aligned access or the first half of
   // a misaligned access sees an error provide the calculated access address. For the second half of
   // a misaligned access provide the word aligned address of the second half.
-  assign addr_last_d = addr_incr_req_o ? data_addr_w_aligned : data_addr;
+  // assign addr_last_d = addr_incr_req_o ? data_addr_w_aligned : data_addr;
+
+  // always_ff @(posedge clk_i or negedge rst_ni) begin
+  //   if (!rst_ni) begin
+  //     addr_last_q <= '0;
+  //   end else if (addr_update) begin
+  //     addr_last_q <= addr_last_d;
+  //   end
+  // end
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       addr_last_q <= '0;
-    end else if (addr_update) begin
+    end else begin
       addr_last_q <= addr_last_d;
     end
   end
@@ -122,6 +135,8 @@ module vector_store_unit (
   logic [1:0] valid_cnt_q, valid_cnt_d;
   
   assign rd_bank_o = gnt_cnt_q;
+
+  assign st_resp_valid_o   = (data_rvalid_i) & (last_valid);
 
   // Grant and valid counters
   always_comb begin
@@ -203,7 +218,7 @@ module vector_store_unit (
   always_comb begin
     st_state_d = st_state_q;
 
-    addr_update         = 1'b0;
+    // addr_update         = 1'b0;
     
     // Memory interface defaults
     data_req_o = 1'b0;
@@ -216,6 +231,8 @@ module vector_store_unit (
 
     last_rf_data_d = last_rf_data_q;
     last_mask_d = last_mask_q;
+
+    addr_last_d = addr_last_q;
 
     case (st_state_q)
       ST_IDLE: begin
@@ -236,10 +253,11 @@ module vector_store_unit (
           last_rf_data_d = rd_rdata_i;
           
           if (data_gnt_i) begin
-            addr_update         = 1'b1;
+            // addr_update         = 1'b1;
             if (last_req) begin
               st_state_d = ST_IDLE; // Single transfer complete
             end else begin
+              addr_last_d = data_addr;
               st_state_d = ST_REQ;
             end
           end else begin
@@ -260,6 +278,7 @@ module vector_store_unit (
           if (last_req) begin
             st_state_d = ST_IDLE; // Return to IDLE after last grant
           end else begin
+            addr_last_d = data_addr;
             st_state_d = ST_REQ;
           end
         end
@@ -289,6 +308,7 @@ module vector_store_unit (
             st_state_d = ST_IDLE;
           end else begin
             // Stay in ST_REQ for next transfer
+            addr_last_d = data_addr;
           end
         end else begin
           st_state_d = ST_WAIT_GNT;

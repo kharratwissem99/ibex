@@ -63,6 +63,8 @@ module ibex_decoder #(
   output logic                 rf_ren_a_o,          // Instruction reads from RF addr A
   output logic                 rf_ren_b_o,          // Instruction reads from RF addr B
 
+  output logic                 lsu_mux_o,          // Instruction reads from RF addr B
+
   // ALU
   output ibex_pkg::alu_op_e    alu_operator_o,        // ALU operation selection
   output ibex_pkg::op_a_sel_e  alu_op_a_mux_sel_o,    // operand a selection: reg value, PC,
@@ -236,6 +238,8 @@ module ibex_decoder #(
     dret_insn_o           = 1'b0;
     ecall_insn_o          = 1'b0;
     wfi_insn_o            = 1'b0;
+
+    lsu_mux_o = 1'b0;
 
     opcode                = opcode_e'(instr[6:0]);
 
@@ -654,16 +658,19 @@ module ibex_decoder #(
           data_req_vs_o      = 1'b1;  // Request memory access // note: we can't use the same data_req_o because it will trigger the scalar lsu. it can be used analog to data_req_o to trigger the vector LSU
           data_we_o          = 1'b1;  // Write enable
           data_type_o        = 2'b10; // Byte access (like sb) // todo: for it is ok but in the future we will connct this directly to vector_store_unit. see core 
+          lsu_mux_o = 1'b1;
         end else if (instr[14:12] == 3'b101 && instr[31:20] == 12'b0) begin // vse16.v  
           rf_ren_a_o         = 1'b1;
           data_req_vs_o      = 1'b1;
           data_we_o          = 1'b1;
           data_type_o        = 2'b01; // Half-word access (like sh)
+          lsu_mux_o = 1'b1;
         end else if (instr[14:12] == 3'b110 && instr[31:20] == 12'b0) begin // vse32.v
           rf_ren_a_o         = 1'b1;
           data_req_vs_o      = 1'b1;  
           data_we_o          = 1'b1;
           data_type_o        = 2'b00; // Word access (like sw)
+          lsu_mux_o = 1'b1;
         end else begin
           illegal_insn = 1'b1; // Unsupported vector instruction
         end

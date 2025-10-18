@@ -1,0 +1,57 @@
+
+# XM-Sim Command File
+# TOOL:	xmsim(64)	24.03-s004
+#
+#
+# You can restore this configuration with:
+#
+#      xrun -q -f edalize_main.f -defparam RV32E=0 -defparam ICache=0 -defparam ICacheScramble=0 -defparam ICacheECC=0 -defparam BranchTargetALU=0 -defparam WritebackStage=0 -defparam SecureIbex=0 -defparam BranchPredictor=0 -defparam DbgTriggerEn=0 -defparam PMPEnable=0 -defparam PMPGranularity=0 -defparam PMPNumRegions=4 -defparam MHPMCounterNum=0 -defparam MHPMCounterWidth=40 -defparam SRAMInitFile=/home/kharrat/Desktop/repos/ibex/dummy.vmem -top ibex_simple_system -access rwc -input restore2.tcl -input restore.tcl
+#
+
+set tcl_prompt1 {puts -nonewline "xcelium> "}
+set tcl_prompt2 {puts -nonewline "> "}
+set vlog_format %h
+set vhdl_format %v
+set real_precision 6
+set display_unit auto
+set time_unit module
+set heap_garbage_size -200
+set heap_garbage_time 0
+set assert_report_level note
+set assert_stop_level error
+set autoscope yes
+set assert_1164_warnings yes
+set pack_assert_off {}
+set severity_pack_assert_off {note warning}
+set assert_output_stop_level failed
+set tcl_debug_level 0
+set relax_path_name 1
+set vhdl_vcdmap XX01ZX01X
+set intovf_severity_level ERROR
+set probe_screen_format 0
+set rangecnst_severity_level ERROR
+set textio_severity_level ERROR
+set vital_timing_checks_on 1
+set vlog_code_show_force 0
+set assert_count_attempts 1
+set tcl_all64 false
+set tcl_runerror_exit false
+set assert_report_incompletes 0
+set show_force 1
+set force_reset_by_reinvoke 0
+set tcl_relaxed_literal 0
+set probe_exclude_patterns {}
+set probe_packed_limit 4k
+set probe_unpacked_limit 16k
+set assert_internal_msg no
+set svseed 1
+set assert_reporting_mode 0
+set vcd_compact_mode 0
+set vhdl_forgen_loopindex_enum_pos 0
+set xmreplay_dc_debug 0
+set tcl_runcmd_interrupt next_command
+set tcl_sigval_prefix {#}
+database -open -shm -into waves.shm waves -default
+probe -create -database waves ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.EEW_BYTES ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.SHIFT_FAKTOR ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.adder_result_ex_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.addr_incr_req_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.anzahl_req ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.busy_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.clk_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.current_mask ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.data_addr ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.data_addr_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.data_addr_w_aligned ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.data_be_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.data_err_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.data_gnt_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.data_offset ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.data_req_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.data_rvalid_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.data_wdata ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.data_wdata_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.data_we_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.first_mask ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.gnt_cnt_d ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.gnt_cnt_q ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.last_mask ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.last_mask_d ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.last_mask_q ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.last_req ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.last_rf_data_d ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.last_rf_data_q ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.last_valid ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.rd_bank_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.rd_rdata_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.request_type_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.rst_ni ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.st_done ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.st_error_d ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.st_error_q ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.st_req ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.st_state_d ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.st_state_q ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.store_err ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.store_err_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.total_bytes ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.valid_cnt_d ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.valid_cnt_q ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_store_unit_i.vl_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.adder_result_ex_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.addr_incr_req_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.addr_last_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.busy_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.clk_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.data_addr_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.data_be_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.data_bus_err_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.data_gnt_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.data_pmp_err_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.data_rdata_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.data_req_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.data_rvalid_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.data_wdata_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.data_we_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.load_err_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.load_resp_intg_err_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.lsu_rdata_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.lsu_rdata_valid_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.lsu_req_done_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.lsu_req_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.lsu_resp_valid_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.lsu_sign_ext_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.lsu_type_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.lsu_wdata_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.lsu_we_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.perf_load_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.perf_store_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.rst_ni ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.store_err_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.load_store_unit_i.store_resp_intg_err_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.alu_operand_a_ex_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.alu_operand_b_ex_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.alu_operator_ex_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.id_in_ready_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.vst_req_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.instr_id_done_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.instr_is_compressed_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.instr_perf_count_id_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.instr_rdata_alu_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.instr_rdata_c_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.instr_rdata_i ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.instr_req_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.instr_type_wb_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.instr_valid_clear_o ibex_simple_system.u_top.u_ibex_top.u_ibex_core.id_stage_i.instr_valid_i
+
+simvision -input restore.tcl.svcf
