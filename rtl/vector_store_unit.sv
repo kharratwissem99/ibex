@@ -131,8 +131,8 @@ module vector_store_unit (
   // (lsu_req_i | (ls_fsm_cs != IDLE)) & (ls_fsm_ns == IDLE);
   assign st_done =  last_req; // give back done when the last request is accepted todo:(or issued??)
 
-  logic [1:0] gnt_cnt_q, gnt_cnt_d;
-  logic [1:0] valid_cnt_q, valid_cnt_d;
+  logic [2:0] gnt_cnt_q, gnt_cnt_d;
+  logic [2:0] valid_cnt_q, valid_cnt_d;
   
   assign rd_bank_o = gnt_cnt_q;
 

@@ -411,6 +411,8 @@ module ibex_core import ibex_pkg::*; #(
   logic        perf_store;
 
   logic lsu_mux;
+  logic data_rvalid_vector_i,data_rvalid_scalar_i;
+
 
   // for RVFI
   logic        illegal_insn_id, unused_illegal_insn_id; // ID stage sees an illegal instruction
@@ -749,11 +751,15 @@ module ibex_core import ibex_pkg::*; #(
 
   logic st_resp_valid;
   always_comb begin
-    if (lsu_mux) begin
+    if (lsu_mux) begin // to the vector unit
       lsu_resp_valid_shared = st_resp_valid;
+      data_rvalid_scalar_i = 1'b0;
+      data_rvalid_vector_i = data_rvalid_i;
     end
-    else begin
+    else begin // to the scalar unit
       lsu_resp_valid_shared = lsu_resp_valid;
+      data_rvalid_scalar_i = data_rvalid_i;
+      data_rvalid_vector_i = 1'b0;
     end
   end 
 
@@ -843,7 +849,7 @@ module ibex_core import ibex_pkg::*; #(
     // data interface
     .data_req_o    (data_req_out),
     .data_gnt_i    (data_gnt_i),
-    .data_rvalid_i (data_rvalid_i),
+    .data_rvalid_i (data_rvalid_scalar_i),
     .data_bus_err_i(data_err_i),
     .data_pmp_err_i(pmp_req_err[PMP_D]),
 
@@ -944,7 +950,7 @@ module ibex_core import ibex_pkg::*; #(
     .data_be_o(vsu_data_be),
     .data_wdata_o(vsu_data_wdata),
     .data_gnt_i(data_gnt_i),
-    .data_rvalid_i(data_rvalid_i),
+    .data_rvalid_i(data_rvalid_vector_i),
     .data_err_i(data_err_i),
     
     .busy_o(vsu_busy)
@@ -1168,7 +1174,7 @@ module ibex_core import ibex_pkg::*; #(
   end
 
   //todo wissem: was mache mit diesen asserts siehe oben auch when the WB stage enabled ist. sollen die auch für meine vector store unit funktionieren
-  //`ASSERT(NoMemResponseWithoutPendingAccess,
+  // `ASSERT(NoMemResponseWithoutPendingAccess,
   //  data_rvalid_i |-> outstanding_load_resp | outstanding_store_resp, clk_i, !rst_ni)
 
 
