@@ -163,7 +163,7 @@ module vector_store_unit (
     last_valid = 1'b0;
     st_error_d = st_error_q;
     
-    if (data_rvalid_i) begin
+    if (data_rvalid_i && (~st_req)) begin
       if (data_err_i) st_error_d = 1'b1;
       if (valid_cnt_q + 1 == anzahl_req) begin
         last_valid = 1'b1;
