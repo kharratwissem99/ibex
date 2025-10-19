@@ -1152,6 +1152,7 @@ module ibex_core import ibex_pkg::*; #(
   assign outstanding_store_id = id_stage_i.instr_executing & id_stage_i.lsu_req_dec &
                                 id_stage_i.lsu_we;
 
+  // todo: use this to check a correct behaviour of the vector store and load unit
   if (WritebackStage) begin : gen_wb_stage
     // When the writeback stage is present a load/store could be in ID or WB. A Load/store in ID can
     // see a response before it moves to WB when it is unaligned otherwise we should only see
@@ -1174,8 +1175,8 @@ module ibex_core import ibex_pkg::*; #(
   end
 
   //todo wissem: was mache mit diesen asserts siehe oben auch when the WB stage enabled ist. sollen die auch für meine vector store unit funktionieren
-  // `ASSERT(NoMemResponseWithoutPendingAccess,
-  //  data_rvalid_i |-> outstanding_load_resp | outstanding_store_resp, clk_i, !rst_ni)
+  `ASSERT(NoMemResponseWithoutPendingAccess,
+   data_rvalid_scalar_i |-> outstanding_load_resp | outstanding_store_resp, clk_i, !rst_ni)
 
 
   // Keep track of the PC last seen in the ID stage when fetch is disabled
