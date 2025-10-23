@@ -96,9 +96,11 @@ module vector_load_unit (
 
   // Request counting
   logic [6:0] total_bytes;
+  logic [6:0] total_bytes_without_offset;
   logic [2:0] anzahl_req;
   
-  assign total_bytes = data_offset + (vl_i << SHIFT_FAKTOR);
+  assign total_bytes_without_offset = (vl_i << SHIFT_FAKTOR);
+  assign total_bytes = data_offset + total_bytes_without_offset;
   assign anzahl_req = total_bytes[6:2] + |total_bytes[1:0]; // Ceiling division by 4
 
   logic [31:0]  addr_last_q, addr_last_d;
@@ -146,6 +148,16 @@ module vector_load_unit (
 
   always_comb begin
     unique case (total_bytes[1:0])
+      2'b00:   last_mask =  4'b1111;
+      2'b01:   last_mask =  4'b0001;
+      2'b10:   last_mask =  4'b0011;
+      2'b11:   last_mask =  4'b0111;
+      default: last_mask =  4'b1111;
+    endcase // case (n[1:0])
+  end
+
+  always_comb begin
+    unique case (total_bytes_without_offset[1:0])
       2'b00:   last_mask =  4'b1111;
       2'b01:   last_mask =  4'b0001;
       2'b10:   last_mask =  4'b0011;
@@ -205,25 +217,25 @@ module vector_load_unit (
       if (valid_cnt_q + 1 == anzahl_req) begin // last request
         last_valid = 1'b1;
         valid_cnt_d = 2'd0; // Reset for next operation
-        if (valid_cnt_q + 1 == 2'd1) begin //first and last
+        if (valid_cnt_q == 2'd0) begin //first and last
           wr_en_o = 1'b1;
           wr_bank_o =  2'b00;
-          wr_wdata_o =;
+          wr_wdata_o = rd_rdata_i >> data_offset * 8;
           wr_wstrb_o =;
         end
         else begin // last but not first
           wr_en_o = 1'b1;
           wr_bank_o = valid_cnt_q - 1;
           wr_wdata_o =;
-          wr_wstrb_o =;
+          wr_wstrb_o = 4'b1111;
         end
       end else begin
         valid_cnt_d = valid_cnt_q + 1;
-        if (valid_cnt_q + 1 == 2'd1) begin //first but not last
+        if (valid_cnt_q == 2'd0) begin //first but not last
           wr_en_o = 1'b1;
           wr_bank_o = 2'b00;
           wr_wdata_o =;
-          wr_wstrb_o =;
+          wr_wstrb_o = ~first_mask;
         end
         else begin // not last and not first
           wr_en_o = 1'b1;
@@ -244,14 +256,14 @@ module vector_load_unit (
   // Data rotation for misaligned accesses
   logic [31:0] data_wdata;
   // todo rd_data_i not needed foe load only for store
-//   always_comb begin
-//     case (data_offset)
-//       2'b00: data_wdata = rd_rdata_i;
-//       2'b01: data_wdata = {rd_rdata_i[23:0], last_rf_data_q[31:24]};
-//       2'b10: data_wdata = {rd_rdata_i[15:0], last_rf_data_q[31:16]};
-//       2'b11: data_wdata = {rd_rdata_i[7:0],  last_rf_data_q[31:8]};
-//     endcase
-//   end
+  always_comb begin
+    case (data_offset)
+      2'b00: data_wdata = rd_rdata_i;
+      2'b01: data_wdata = {last_rf_data_q[7:0],rd_rdata_i[31:8]};
+      2'b10: data_wdata = {rd_rdata_i[15:0], last_rf_data_q[31:16]};
+      2'b11: data_wdata = {rd_rdata_i[7:0],  last_rf_data_q[31:8]};
+    endcase
+  end
   // Main state machine
   always_comb begin
     st_state_d = st_state_q;
