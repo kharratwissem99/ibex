@@ -24,9 +24,9 @@ module vector_load_unit (
   // todo: this outputs should be driven to the register file
   output  logic            wr_en_o,
 //   output  logic [4:0]      wr_vreg_o, we can drive it from the outside
-  output  logic [1:0]      wr_bank_o,      // 0..3 (which 32-bit word of the 128b reg)
-  output  logic [31:0]     wr_wdata_o,
-  output  logic [3:0]      wr_wstrb_o,
+//   output  logic [1:0]      wr_bank_o,      // 0..3 (which 32-bit word of the 128b reg)
+  output  logic [127:0]     wr_wdata_o,
+//   output  logic [3:0]      wr_wstrb_o,
 
   // Interface to memory
   output logic         data_req_o,
@@ -58,6 +58,8 @@ module vector_load_unit (
   } st_state_e;
   
   st_state_e st_state_q, st_state_d;
+
+  logic [127:0] result_d, result_q; 
 
   // Address and data processing
   logic [31:0] data_addr;
@@ -207,50 +209,85 @@ module vector_load_unit (
     //end
   end
 
-  always_comb begin
-    valid_cnt_d = valid_cnt_q;
-    last_valid = 1'b0;
-    st_error_d = st_error_q;
+//   always_comb begin
+//     valid_cnt_d = valid_cnt_q;
+//     last_valid = 1'b0;
+//     st_error_d = st_error_q;
     
-    if (data_rvalid_i && (~ld_req)) begin
-      if (data_err_i) st_error_d = 1'b1; // todo: interrupt the request
-      if (valid_cnt_q + 1 == anzahl_req) begin // last request
-        last_valid = 1'b1;
-        valid_cnt_d = 2'd0; // Reset for next operation
-        if (valid_cnt_q == 2'd0) begin //first and last
-          wr_en_o = 1'b1;
-          wr_bank_o =  2'b00;
-          wr_wdata_o = rd_rdata_i >> data_offset * 8;
-          wr_wstrb_o =;
-        end
-        else begin // last but not first
-          wr_en_o = 1'b1;
-          wr_bank_o = valid_cnt_q - 1;
-          wr_wdata_o =;
-          wr_wstrb_o = 4'b1111;
-        end
-      end else begin
-        valid_cnt_d = valid_cnt_q + 1;
-        if (valid_cnt_q == 2'd0) begin //first but not last
-          wr_en_o = 1'b1;
-          wr_bank_o = 2'b00;
-          wr_wdata_o =;
-          wr_wstrb_o = ~first_mask;
-        end
-        else begin // not last and not first
-          wr_en_o = 1'b1;
-          wr_bank_o = valid_cnt_q - 1;
-          wr_wdata_o =;
-          wr_wstrb_o = 4'b1111;
-        end
-      end
-    end
+//     if (data_rvalid_i && (~ld_req)) begin
+//       if (data_err_i) st_error_d = 1'b1; // todo: interrupt the request
+    //   if (valid_cnt_q + 1 == anzahl_req) begin // last request
+    //     last_valid = 1'b1;
+    //     valid_cnt_d = 2'd0; // Reset for next operation
+    //     if (valid_cnt_q == 2'd0) begin //first and last
+    //       wr_en_o = 1'b1;
+    //       wr_bank_o =  2'b00;
+    //       wr_wdata_o = rd_rdata_i >> data_offset * 8;
+    //       wr_wstrb_o =;
+    //     end
+    //     else begin // last but not first
+    //       wr_en_o = 1'b1;
+    //       wr_bank_o = valid_cnt_q - 1;
+    //       wr_wdata_o =;
+    //       wr_wstrb_o = 4'b1111;
+    //     end
+    //   end else begin
+    //     valid_cnt_d = valid_cnt_q + 1;
+    //     if (valid_cnt_q == 2'd0) begin //first but not last
+    //       wr_en_o = 1'b1;
+    //       wr_bank_o = 2'b00;
+    //       wr_wdata_o =;
+    //       wr_wstrb_o = ~first_mask;
+    //     end
+    //     else begin // not last and not first
+    //       wr_en_o = 1'b1;
+    //       wr_bank_o = valid_cnt_q - 1;
+    //       wr_wdata_o =;
+    //       wr_wstrb_o = 4'b1111;
+    //     end
+    //   end
+
+
+//     end
     
-    if (ld_req && (st_state_q == ST_IDLE)) begin
-      valid_cnt_d = 2'd0; // Reset at start
-      st_error_d = 1'b0; // Reset error flag
+//     if (ld_req && (st_state_q == ST_IDLE)) begin
+//       valid_cnt_d = 2'd0; // Reset at start
+//       st_error_d = 1'b0; // Reset error flag
+//     end
+//   end
+    logic [127 + 32:0] big_data;
+    always_comb begin
+        valid_cnt_d = valid_cnt_q;
+        last_valid = 1'b0;
+        st_error_d = st_error_q;
+        
+        if (data_rvalid_i && (~st_req)) begin
+        if (data_err_i) st_error_d = 1'b1;
+        if (valid_cnt_q + 1 == anzahl_req) begin //last valid signal
+            last_valid = 1'b1;
+            valid_cnt_d = 2'd0; // Reset for next operation
+            wr_en_o = 1'b1;
+            // if (anzahl_req == 1) wr_wdata_o = {95'b0, data_rdata_i} >> (data_offset * 8);
+            // else if (anzahl_req == 2) wr_wdata_o = {95'b0, data_rdata_i, } >> (data_offset * 8);
+            // result_d = {data_rdata_i, result_q[127:32]};
+            if (anzahl_req == 5) begin // todo: check this
+                big_data = {data_rdata_i & last_mask, result_q};
+                big_data = big_data >> (data_offset * 8);
+                wr_wdata_o = big_data[127:0];
+            end
+            else wr_wdata_o = {data_rdata_i & last_mask, result_q[127:32]} >> (32 * (4 - anzahl_req) + data_offset * 8);
+
+        end else begin
+            valid_cnt_d = valid_cnt_q + 1;
+            result_d = {data_rdata_i, result_q[127:32]};
+        end
+        end
+        
+        if (st_req && (st_state_q == ST_IDLE)) begin
+        valid_cnt_d = 2'd0; // Reset at start
+        st_error_d = 1'b0; // Reset error flag
+        end
     end
-  end
 
   logic [31:0] last_rf_data_d, last_rf_data_q;
   // Data rotation for misaligned accesses

@@ -18,8 +18,8 @@ module vector_store_unit (
   
   // interface to ibex_vrf
   // output logic         rd_en_o,            // Add read enable
-  // output logic [1:0]   rd_bank_o,
-  input  logic [127:0]  rd_rdata_rf_i,
+  output logic [1:0]   rd_bank_o,
+  input  logic [31:0]  rd_rdata_i,
 
   // interface to memory
   output logic         data_req_o,
@@ -43,8 +43,6 @@ module vector_store_unit (
     ST_WAIT_GNT,
     ST_REQ
   } st_state_e;
-
-  logic [31:0] rd_rdata_i;
   
   st_state_e st_state_q, st_state_d;
 
@@ -62,26 +60,6 @@ module vector_store_unit (
   logic [2:0] EEW_BYTES;
   logic [1:0] SHIFT_FAKTOR;
   
-  always_comb begin
-    case (gnt_cnt_q)
-      3'b000: begin
-        rd_rdata_i = rd_rdata_rf_i[31:0];
-      end
-      3'b001: begin
-        rd_rdata_i = rd_rdata_rf_i[63:32];
-      end
-      3'b010: begin
-        rd_rdata_i = rd_rdata_rf_i[95:64];
-      end
-      3'b011: begin
-        rd_rdata_i = rd_rdata_rf_i[127:96];
-      end
-      default: begin
-        rd_rdata_i = rd_rdata_rf_i[31:0];
-      end
-    endcase
-  end
-
   always_comb begin
     case (request_type_i)
       3'b000: begin // SEW=8
@@ -156,7 +134,7 @@ module vector_store_unit (
   logic [2:0] gnt_cnt_q, gnt_cnt_d;
   logic [2:0] valid_cnt_q, valid_cnt_d;
   
-  // assign rd_bank_o = gnt_cnt_q;
+  assign rd_bank_o = gnt_cnt_q;
 
   assign st_resp_valid_o   = (data_rvalid_i) & (last_valid);
 
