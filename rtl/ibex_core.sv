@@ -255,10 +255,12 @@ module ibex_core import ibex_pkg::*; #(
   logic lsu_addr_incr_req_shared;
   
   // Vector Register File signals
-  logic [1:0]  vrf_rd_bank;
-  logic [31:0] vrf_rd_rdata;
-  logic        vrf_rd_en;
-  logic [4:0]  vrf_rd_vreg;
+  logic [127:0] vrf_rd_rdata_a;
+  logic [127:0] vrf_rd_rdata_b;
+  logic         vrf_rd_en_a;
+  logic         vrf_rd_en_b;
+  logic [4:0]   vrf_rd_vreg_a;
+  logic [4:0]   vrf_rd_vreg_b;
 
   // Jump and branch target and decision (EX->IF)
   logic [31:0] branch_target_ex;
@@ -823,8 +825,8 @@ module ibex_core import ibex_pkg::*; #(
   // assign vsu_st_req = vector_store_req && lsu_req; // todo: No, we can't use the same signal
   
   // Set vector register to read (vs3 field = instr[24:20])
-  assign vrf_rd_vreg = instr_rdata_id[11:7]; // for vector register instruction unlike the the scalar store
-  // assign vrf_rd_en = vsu_st_req || vsu_busy;
+  assign vrf_rd_vreg_a = instr_rdata_id[11:7]; // for vector register instruction unlike the the scalar store
+  assign vrf_rd_en_a = 1'b1; // Always enable for now to ensure data is available
   assign lsu_addr_incr_req_shared = lsu_addr_incr_req || vsu_addr_incr_req; //todo: es ist for now ok because vector store unit and scalar lsu will not work together 
 
   always_comb begin
@@ -903,15 +905,18 @@ module ibex_core import ibex_pkg::*; #(
     // Write interface (not connected for now, would be used by vector load instructions)
     .wr_en_i(1'b0),
     .wr_vreg_i(5'b0),
-    .wr_bank_i(2'b0),
-    .wr_wdata_i(32'b0),
-    .wr_wstrb_i(4'b0),
+    .wr_wdata_i(128'b0),
+    .wr_wstrb_i(16'b0),
     
-    // Read interface for vector store unit
-    .rd_en_i(1'b1), // todo: for now always set to 1
-    .rd_vreg_i(vrf_rd_vreg),
-    .rd_bank_i(vrf_rd_bank),
-    .rd_rdata_o(vrf_rd_rdata)
+    // Read port A for vector store unit
+    .rd_en_a_i(vrf_rd_en_a),
+    .rd_vreg_a_i(vrf_rd_vreg_a),
+    .rd_rdata_a_o(vrf_rd_rdata_a),
+    
+    // Read port B (unused for now)
+    .rd_en_b_i(1'b0),
+    .rd_vreg_b_i(5'b0),
+    .rd_rdata_b_o(vrf_rd_rdata_b)
   );
 
   ///////////////////////////////
@@ -936,8 +941,7 @@ module ibex_core import ibex_pkg::*; #(
     .store_err_o(vsu_store_err),
     
     // VRF interface
-    .rd_bank_o(vrf_rd_bank),
-    .rd_rdata_i(vrf_rd_rdata),
+    .rd_rdata_i(vrf_rd_rdata_a),
 
     .addr_last_o    (st_addr_last),
 

@@ -1,21 +1,25 @@
 module ibex_vrf #(
-  parameter int NREGS = 32
+  parameter int NREGS = 32,
+  parameter int VLEN = 128  // Vector length in bits
 )(
   input  logic            clk_i,
   input  logic            rst_ni,
 
-  // Write: one 32-bit word (bank) with per-byte strobes
+  // Write port: whole 128-bit register with byte enables
   input  logic            wr_en_i,
   input  logic [4:0]      wr_vreg_i,
-  input  logic [1:0]      wr_bank_i,      // 0..3 (which 32-bit word of the 128b reg)
-  input  logic [31:0]     wr_wdata_i,
-  input  logic [3:0]      wr_wstrb_i,
+  input  logic [VLEN-1:0] wr_wdata_i,
+  input  logic [VLEN/8-1:0] wr_wstrb_i,  // 16 byte enables for 128-bit register
 
-  // Read: one 32-bit word (bank) (for stores/ALU later)
-  input  logic            rd_en_i,
-  input  logic [4:0]      rd_vreg_i,
-  input  logic [1:0]      rd_bank_i,
-  output logic [31:0]     rd_rdata_o
+  // Read port A: whole 128-bit register
+  input  logic            rd_en_a_i,
+  input  logic [4:0]      rd_vreg_a_i,
+  output logic [VLEN-1:0] rd_rdata_a_o,
+
+  // Read port B: whole 128-bit register  
+  input  logic            rd_en_b_i,
+  input  logic [4:0]      rd_vreg_b_i,
+  output logic [VLEN-1:0] rd_rdata_b_o
 
 `ifdef VERIF_VRF_PEEK
  ,output logic [127:0]     vrf_peek_o     // optional: expose whole reg for TB
@@ -23,44 +27,45 @@ module ibex_vrf #(
 `endif
 );
 
-  // storage: NREGS × 4 banks × 32 bits
-  logic [31:0] mem [NREGS-1:0][3:0];
+  // Storage: NREGS × 128-bit registers
+  logic [VLEN-1:0] vrf_mem [NREGS-1:0];
 
-  // byte-write
+  // Write port with byte enables
   always_ff @(posedge clk_i) begin
-    if (wr_en_i) begin
-      if (wr_wstrb_i[0]) mem[wr_vreg_i][wr_bank_i][ 7: 0] <= wr_wdata_i[ 7: 0];
-      if (wr_wstrb_i[1]) mem[wr_vreg_i][wr_bank_i][15: 8] <= wr_wdata_i[15: 8];
-      if (wr_wstrb_i[2]) mem[wr_vreg_i][wr_bank_i][23:16] <= wr_wdata_i[23:16];
-      if (wr_wstrb_i[3]) mem[wr_vreg_i][wr_bank_i][31:24] <= wr_wdata_i[31:24];
+    if (!rst_ni) begin
+      // Reset not needed here as we use initial block for test data
+    end else if (wr_en_i) begin
+      // Byte-wise write with strobes
+      for (int i = 0; i < VLEN/8; i++) begin
+        if (wr_wstrb_i[i]) begin
+          vrf_mem[wr_vreg_i][8*i +: 8] <= wr_wdata_i[8*i +: 8];
+        end
+      end
     end
   end
 
-  // read (registered or combo; here registered for timing cleanliness)
-  // always_ff @(posedge clk_i) begin
-  //   if (rd_en_i) begin
-  //     rd_rdata_o <= mem[rd_vreg_i][rd_bank_i];
-  //   end
-  // end
-  // changed to combo
+  // Read port A (combinational for better performance)
   always_comb begin
-    if (rd_en_i) begin
-      rd_rdata_o <= mem[rd_vreg_i][rd_bank_i];
+    if (rd_en_a_i) begin
+      rd_rdata_a_o = vrf_mem[rd_vreg_a_i];
+    end else begin
+      rd_rdata_a_o = '0;
     end
-    else begin
-      rd_rdata_o <= 32'b0;
-    end 
+  end
+
+  // Read port B (combinational for better performance)
+  always_comb begin
+    if (rd_en_b_i) begin
+      rd_rdata_b_o = vrf_mem[rd_vreg_b_i];
+    end else begin
+      rd_rdata_b_o = '0;
+    end
   end
 
 `ifdef VERIF_VRF_PEEK
-  // expose whole 128b reg for TB (word3 is highest bytes)
+  // expose whole 128b reg for TB
   always_comb begin
-    vrf_peek_o = {
-      mem[vrf_peek_idx_i][3],
-      mem[vrf_peek_idx_i][2],
-      mem[vrf_peek_idx_i][1],
-      mem[vrf_peek_idx_i][0]
-    };
+    vrf_peek_o = vrf_mem[vrf_peek_idx_i];
   end
 `endif
 
@@ -68,49 +73,31 @@ initial begin
   // Initialize vector registers with distinctive test data
   #100; // Wait for reset
   
-  // v1: Original test pattern
-  mem[1][0] = 32'h12345678;  // Bank 0
-  mem[1][1] = 32'hABCDEF00;  // Bank 1  
-  mem[1][2] = 32'hDEADBEEF;  // Bank 2
-  mem[1][3] = 32'hCAFEBABE;  // Bank 3
+  // v1: Original test pattern (little-endian: LSB at [0])
+  vrf_mem[1] = {32'hCAFEBABE, 32'hDEADBEEF, 32'hABCDEF00, 32'h12345678};
   
   // v2: Incremented pattern
-  mem[2][0] = 32'h23456789;  // Bank 0
-  mem[2][1] = 32'hBCDEF011;  // Bank 1
-  mem[2][2] = 32'hEADBEEF0;  // Bank 2
-  mem[2][3] = 32'hAFEBABEC;  // Bank 3
+  vrf_mem[2] = {32'hAFEBABEC, 32'hEADBEEF0, 32'hBCDEF011, 32'h23456789};
   
   // v3: Rotated pattern  
-  mem[3][0] = 32'h3456789A;  // Bank 0
-  mem[3][1] = 32'hCDEF0122;  // Bank 1
-  mem[3][2] = 32'hADBEEF01;  // Bank 2
-  mem[3][3] = 32'hFEBABECA;  // Bank 3
+  vrf_mem[3] = {32'hFEBABECA, 32'hADBEEF01, 32'hCDEF0122, 32'h3456789A};
   
   // v4: Inverted pattern
-  mem[4][0] = 32'hEDCBA987;  // Bank 0
-  mem[4][1] = 32'h543210FF;  // Bank 1
-  mem[4][2] = 32'h21524110;  // Bank 2
-  mem[4][3] = 32'h35014543;  // Bank 3
+  vrf_mem[4] = {32'h35014543, 32'h21524110, 32'h543210FF, 32'hEDCBA987};
   
   // v5: Alternating pattern
-  mem[5][0] = 32'hAAAA5555;  // Bank 0
-  mem[5][1] = 32'h5555AAAA;  // Bank 1
-  mem[5][2] = 32'hAAAA5555;  // Bank 2
-  mem[5][3] = 32'h5555AAAA;  // Bank 3
+  vrf_mem[5] = {32'h5555AAAA, 32'hAAAA5555, 32'h5555AAAA, 32'hAAAA5555};
   
   // v31: Maximum register with special pattern
-  mem[31][0] = 32'hFFFFFFFF; // Bank 0 - all ones
-  mem[31][1] = 32'h00000000; // Bank 1 - all zeros
-  mem[31][2] = 32'hF0F0F0F0; // Bank 2 - alternating nibbles
-  mem[31][3] = 32'h0F0F0F0F; // Bank 3 - alternating nibbles
+  vrf_mem[31] = {32'h0F0F0F0F, 32'hF0F0F0F0, 32'h00000000, 32'hFFFFFFFF};
   
   $display("VRF initialized:");
-  $display("  v1  = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", mem[1][3], mem[1][2], mem[1][1], mem[1][0]);
-  $display("  v2  = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", mem[2][3], mem[2][2], mem[2][1], mem[2][0]);
-  $display("  v3  = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", mem[3][3], mem[3][2], mem[3][1], mem[3][0]);
-  $display("  v4  = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", mem[4][3], mem[4][2], mem[4][1], mem[4][0]);
-  $display("  v5  = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", mem[5][3], mem[5][2], mem[5][1], mem[5][0]);
-  $display("  v31 = {0x%08X, 0x%08X, 0x%08X, 0x%08X}", mem[31][3], mem[31][2], mem[31][1], mem[31][0]);
+  $display("  v1  = 0x%032X", vrf_mem[1]);
+  $display("  v2  = 0x%032X", vrf_mem[2]);
+  $display("  v3  = 0x%032X", vrf_mem[3]);
+  $display("  v4  = 0x%032X", vrf_mem[4]);
+  $display("  v5  = 0x%032X", vrf_mem[5]);
+  $display("  v31 = 0x%032X", vrf_mem[31]);
 end
 
 endmodule

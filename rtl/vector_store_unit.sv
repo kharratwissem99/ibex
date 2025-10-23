@@ -17,9 +17,7 @@ module vector_store_unit (
   output logic         st_resp_valid_o,     // LSU has response from transaction -> to ID/EX // this is important for stalling the memory
   
   // interface to ibex_vrf
-  // output logic         rd_en_o,            // Add read enable
-  output logic [1:0]   rd_bank_o,
-  input  logic [31:0]  rd_rdata_i,
+  input  logic [127:0] rd_rdata_i,  // Full 128-bit vector register
 
   // interface to memory
   output logic         data_req_o,
@@ -45,6 +43,9 @@ module vector_store_unit (
   } st_state_e;
   
   st_state_e st_state_q, st_state_d;
+
+  logic [2:0] gnt_cnt_q, gnt_cnt_d;
+  logic [2:0] valid_cnt_q, valid_cnt_d;
 
   // Address and data processing
   logic [31:0] data_addr;
@@ -88,6 +89,22 @@ module vector_store_unit (
   assign total_bytes = data_offset + (vl_i << SHIFT_FAKTOR);
   assign anzahl_req = total_bytes[6:2] + |total_bytes[1:0]; // Ceiling division by 4
 
+  // VRF data extraction - extract the correct 32-bit word from 128-bit register
+  logic [1:0] vrf_word_select;
+  logic [31:0] current_vrf_data;
+  
+  // For vector stores, we read sequential 32-bit words from the vector register
+  assign vrf_word_select = gnt_cnt_q[1:0];
+  
+  always_comb begin
+    case (vrf_word_select)
+      2'b00: current_vrf_data = rd_rdata_i[31:0];    // Word 0 (LSB)
+      2'b01: current_vrf_data = rd_rdata_i[63:32];   // Word 1  
+      2'b10: current_vrf_data = rd_rdata_i[95:64];   // Word 2
+      2'b11: current_vrf_data = rd_rdata_i[127:96];  // Word 3 (MSB)
+    endcase
+  end
+
   logic [31:0]  addr_last_q, addr_last_d;
 
   // output to ID stage: mtval + AGU for misaligned transactions
@@ -130,11 +147,6 @@ module vector_store_unit (
 
   // (lsu_req_i | (ls_fsm_cs != IDLE)) & (ls_fsm_ns == IDLE);
   assign st_done =  last_req; // give back done when the last request is accepted todo:(or issued??)
-
-  logic [2:0] gnt_cnt_q, gnt_cnt_d;
-  logic [2:0] valid_cnt_q, valid_cnt_d;
-  
-  assign rd_bank_o = gnt_cnt_q;
 
   assign st_resp_valid_o   = (data_rvalid_i) & (last_valid);
 
@@ -208,10 +220,10 @@ module vector_store_unit (
   logic [31:0] data_wdata;
   always_comb begin
     case (data_offset)
-      2'b00: data_wdata = rd_rdata_i;
-      2'b01: data_wdata = {rd_rdata_i[23:0], last_rf_data_q[31:24]};
-      2'b10: data_wdata = {rd_rdata_i[15:0], last_rf_data_q[31:16]};
-      2'b11: data_wdata = {rd_rdata_i[7:0],  last_rf_data_q[31:8]};
+      2'b00: data_wdata = current_vrf_data;
+      2'b01: data_wdata = {current_vrf_data[23:0], last_rf_data_q[31:24]};
+      2'b10: data_wdata = {current_vrf_data[15:0], last_rf_data_q[31:16]};
+      2'b11: data_wdata = {current_vrf_data[7:0],  last_rf_data_q[31:8]};
     endcase
   end
   // Main state machine
@@ -250,7 +262,7 @@ module vector_store_unit (
           end
           // data_be_o = current_mask;
 
-          last_rf_data_d = rd_rdata_i;
+          last_rf_data_d = current_vrf_data;
           
           if (data_gnt_i) begin
             // addr_update         = 1'b1;
@@ -301,7 +313,7 @@ module vector_store_unit (
         // Tell ID/EX stage to prepare next address (like normal LSU)
         addr_incr_req_o = 1'b1;
 
-        last_rf_data_d = rd_rdata_i;
+        last_rf_data_d = current_vrf_data;
         
         if (data_gnt_i) begin
           if (last_req) begin
