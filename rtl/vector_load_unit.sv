@@ -15,18 +15,9 @@ module vector_load_unit (
   output logic [31:0]  addr_last_o,
 
   output logic         ld_resp_valid_o,     // LSU has response from transaction -> to ID/EX // this is important for stalling the memory
-  
-  // interface to ibex_vrf
-  // output logic         rd_en_o,            // Add read enable
-//   output logic [1:0]   rd_bank_o, //not needed
-//   input  logic [31:0]  rd_rdata_i, // not needed
 
-  // todo: this outputs should be driven to the register file
   output  logic            wr_en_o,
-//   output  logic [4:0]      wr_vreg_o, we can drive it from the outside
-//   output  logic [1:0]      wr_bank_o,      // 0..3 (which 32-bit word of the 128b reg)
-  output  logic [127:0]     wr_wdata_o,
-//   output  logic [3:0]      wr_wstrb_o,
+  output  logic [127:0]    wr_wdata_o,
 
   // Interface to memory
   output logic         data_req_o,
@@ -48,13 +39,12 @@ module vector_load_unit (
   output logic         busy_o
 );
 
-  //assign ld_resp_valid_o   = (data_rvalid_i | pmp_err_q) & (ls_fsm_cs == IDLE);
   //======checked section==========
   // State machine and control signals
   typedef enum logic [1:0] {
-    ST_IDLE,
-    ST_WAIT_GNT,
-    ST_REQ
+    LD_IDLE,
+    LD_WAIT_GNT,
+    LD_REQ
   } st_state_e;
   
   st_state_e st_state_q, st_state_d;
@@ -65,7 +55,7 @@ module vector_load_unit (
   logic [31:0] data_addr;
   logic [31:0] data_addr_w_aligned;
   logic [1:0]  data_offset;
-  logic         addr_update;
+  // logic         addr_update;
   
   assign data_addr = adder_result_ex_i;
   assign data_offset = data_addr[1:0];
@@ -135,31 +125,20 @@ module vector_load_unit (
 
   //============end checked section==============
   // Mask generation for first and last transfers
-  logic [3:0] first_mask, last_mask, current_mask;
-  // logic [6:0] remaining_bytes;
+  logic [3:0] first_mask, last_mask;
   
   // First transfer mask (based on address alignment)
-  always_comb begin
-    case (data_offset)
-      2'b00: first_mask = 4'b1111;
-      2'b01: first_mask = 4'b1110;
-      2'b10: first_mask = 4'b1100;
-      2'b11: first_mask = 4'b1000;
-    endcase
-  end
+  // always_comb begin
+  //   case (data_offset)
+  //     2'b00: first_mask = 4'b1111;
+  //     2'b01: first_mask = 4'b1110;
+  //     2'b10: first_mask = 4'b1100;
+  //     2'b11: first_mask = 4'b1000;
+  //   endcase
+  // end
 
   always_comb begin
     unique case (total_bytes[1:0])
-      2'b00:   last_mask =  4'b1111;
-      2'b01:   last_mask =  4'b0001;
-      2'b10:   last_mask =  4'b0011;
-      2'b11:   last_mask =  4'b0111;
-      default: last_mask =  4'b1111;
-    endcase // case (n[1:0])
-  end
-
-  always_comb begin
-    unique case (total_bytes_without_offset[1:0])
       2'b00:   last_mask =  4'b1111;
       2'b01:   last_mask =  4'b0001;
       2'b10:   last_mask =  4'b0011;
@@ -177,15 +156,13 @@ module vector_load_unit (
   
   assign store_err = st_error_q;
   assign load_err_o = store_err;
-  assign busy_o = (st_state_q != ST_IDLE);
+  assign busy_o = (st_state_q != LD_IDLE);
 
   // (lsu_req_i | (ls_fsm_cs != IDLE)) & (ls_fsm_ns == IDLE);
   assign ld_done =  last_req; // give back done when the last request is accepted todo:(or issued??)
 
   logic [2:0] gnt_cnt_q, gnt_cnt_d;
   logic [2:0] valid_cnt_q, valid_cnt_d;
-  
-//   assign rd_bank_o = gnt_cnt_q; //only for store
 
   assign ld_resp_valid_o   = (data_rvalid_i) & (last_valid);
 
@@ -194,7 +171,7 @@ module vector_load_unit (
     gnt_cnt_d = gnt_cnt_q;
     last_req = 1'b0;
     
-    if (data_gnt_i && ((st_state_q != ST_IDLE) || ld_req)) begin // todo: blockieren, dass data_gnt incrementiert wird, es soll nicht incrementiert werden, wenn die vector store unit unactiv ist
+    if (data_gnt_i && ((st_state_q != LD_IDLE) || ld_req)) begin // todo: blockieren, dass data_gnt incrementiert wird, es soll nicht incrementiert werden, wenn die vector store unit unactiv ist
       if (gnt_cnt_q + 1 == anzahl_req) begin
         last_req = 1'b1;
         gnt_cnt_d = 2'd0; // Reset for next operation
@@ -204,57 +181,11 @@ module vector_load_unit (
     end
     
     // todo: Es ist vielleicht nutzlos. Nur wenn wir einen Abbruch machen, können wir das brauchen.
-    //if (ld_req && (st_state_q == ST_IDLE)) begin
+    //if (ld_req && (st_state_q == LD_IDLE)) begin
     //  gnt_cnt_d = 2'd0; // Reset at start
     //end
   end
 
-//   always_comb begin
-//     valid_cnt_d = valid_cnt_q;
-//     last_valid = 1'b0;
-//     st_error_d = st_error_q;
-    
-//     if (data_rvalid_i && (~ld_req)) begin
-//       if (data_err_i) st_error_d = 1'b1; // todo: interrupt the request
-    //   if (valid_cnt_q + 1 == anzahl_req) begin // last request
-    //     last_valid = 1'b1;
-    //     valid_cnt_d = 2'd0; // Reset for next operation
-    //     if (valid_cnt_q == 2'd0) begin //first and last
-    //       wr_en_o = 1'b1;
-    //       wr_bank_o =  2'b00;
-    //       wr_wdata_o = rd_rdata_i >> data_offset * 8;
-    //       wr_wstrb_o =;
-    //     end
-    //     else begin // last but not first
-    //       wr_en_o = 1'b1;
-    //       wr_bank_o = valid_cnt_q - 1;
-    //       wr_wdata_o =;
-    //       wr_wstrb_o = 4'b1111;
-    //     end
-    //   end else begin
-    //     valid_cnt_d = valid_cnt_q + 1;
-    //     if (valid_cnt_q == 2'd0) begin //first but not last
-    //       wr_en_o = 1'b1;
-    //       wr_bank_o = 2'b00;
-    //       wr_wdata_o =;
-    //       wr_wstrb_o = ~first_mask;
-    //     end
-    //     else begin // not last and not first
-    //       wr_en_o = 1'b1;
-    //       wr_bank_o = valid_cnt_q - 1;
-    //       wr_wdata_o =;
-    //       wr_wstrb_o = 4'b1111;
-    //     end
-    //   end
-
-
-//     end
-    
-//     if (ld_req && (st_state_q == ST_IDLE)) begin
-//       valid_cnt_d = 2'd0; // Reset at start
-//       st_error_d = 1'b0; // Reset error flag
-//     end
-//   end
     logic [127 + 32:0] big_data;
     always_comb begin
         valid_cnt_d = valid_cnt_q;
@@ -283,127 +214,88 @@ module vector_load_unit (
         end
         end
         
-        if (st_req && (st_state_q == ST_IDLE)) begin
+        if (st_req && (st_state_q == LD_IDLE)) begin
         valid_cnt_d = 2'd0; // Reset at start
         st_error_d = 1'b0; // Reset error flag
         end
     end
 
-  logic [31:0] last_rf_data_d, last_rf_data_q;
+  // logic [31:0] last_rf_data_d, last_rf_data_q;
   // Data rotation for misaligned accesses
-  logic [31:0] data_wdata;
-  // todo rd_data_i not needed foe load only for store
-  always_comb begin
-    case (data_offset)
-      2'b00: data_wdata = rd_rdata_i;
-      2'b01: data_wdata = {last_rf_data_q[7:0],rd_rdata_i[31:8]};
-      2'b10: data_wdata = {rd_rdata_i[15:0], last_rf_data_q[31:16]};
-      2'b11: data_wdata = {rd_rdata_i[7:0],  last_rf_data_q[31:8]};
-    endcase
-  end
+  // logic [31:0] data_wdata;
+  // // todo rd_data_i not needed foe load only for store
+  // always_comb begin
+  //   case (data_offset)
+  //     2'b00: data_wdata = rd_rdata_i;
+  //     2'b01: data_wdata = {last_rf_data_q[7:0],rd_rdata_i[31:8]};
+  //     2'b10: data_wdata = {rd_rdata_i[15:0], last_rf_data_q[31:16]};
+  //     2'b11: data_wdata = {rd_rdata_i[7:0],  last_rf_data_q[31:8]};
+  //   endcase
+  // end
   // Main state machine
   always_comb begin
     st_state_d = st_state_q;
 
-    // addr_update         = 1'b0;
-    
     // Memory interface defaults
     data_req_o = 1'b0;
     data_addr_o = '0;
     data_we_o = 1'b0; // always 0
-    // data_wdata_o = '0;
-    // data_be_o = 4'b0000;
-
-    // wr_en_o = 1'b0;
-    // wr_bank_o = '0;
-    // wr_wdata_o = '0;
-    // wr_wstrb_o = '0;
-    
     addr_incr_req_o = 1'b0;
     addr_last_d = addr_last_q;
 
     // last_rf_data_d = last_rf_data_q;
     // last_mask_d = last_mask_q;
-
-
     case (st_state_q)
-      ST_IDLE: begin
+      LD_IDLE: begin
         if (ld_req) begin
           data_req_o = 1'b1;
           data_addr_o = data_addr_w_aligned;
           data_we_o = 1'b0;
-        //   data_wdata_o = data_wdata;
-        //   if (last_req) begin
-        //     // data_be_o = first_mask & last_mask;
-        //     last_mask_d = first_mask & last_mask;
-        //   end else begin
-        //     // data_be_o = first_mask;
-        //     last_mask_d = first_mask;
-        //   end
-          // data_be_o = current_mask;
-
-        //   last_rf_data_d = rd_rdata_i;
           
           if (data_gnt_i) begin
-            // addr_update         = 1'b1;
             if (last_req) begin
-              st_state_d = ST_IDLE; // Single transfer complete
+              st_state_d = LD_IDLE; // Single transfer complete
             end else begin
               addr_last_d = data_addr;
-              st_state_d = ST_REQ;
+              st_state_d = LD_REQ;
             end
           end else begin
-            st_state_d = ST_WAIT_GNT;
+            st_state_d = LD_WAIT_GNT;
           end
         end
       end
 
-      ST_WAIT_GNT: begin
+      LD_WAIT_GNT: begin
         // Repeat last request until granted
         data_req_o = 1'b1;
         data_addr_o = data_addr_w_aligned;
-        // data_we_o = 1'b1;
-        // data_wdata_o = data_wdata;
-        // data_be_o = last_mask_q;
         
         if (data_gnt_i) begin
           if (last_req) begin
-            st_state_d = ST_IDLE; // Return to IDLE after last grant
+            st_state_d = LD_IDLE; // Return to IDLE after last grant
           end else begin
             addr_last_d = data_addr;
-            st_state_d = ST_REQ;
+            st_state_d = LD_REQ;
           end
         end
       end
 
-      ST_REQ: begin
+      LD_REQ: begin
         // New request for next transfer
         data_req_o = 1'b1;
         data_addr_o = data_addr_w_aligned;
-        // data_we_o = 1'b1;
-        // data_wdata_o = data_wdata;
-        // data_be_o = current_mask;
-        // if (last_req) begin
-        //   data_be_o = last_mask;
-        //   last_mask_d = last_mask;
-        // end else begin
-        //   data_be_o = 4'b1111;
-        //   last_mask_d = 4'b1111;
-        // end
         // Tell ID/EX stage to prepare next address (like normal LSU)
         addr_incr_req_o = 1'b1;
-
-        // last_rf_data_d = rd_rdata_i;
         
         if (data_gnt_i) begin
           if (last_req) begin
-            st_state_d = ST_IDLE;
+            st_state_d = LD_IDLE;
           end else begin
-            // Stay in ST_REQ for next transfer
+            // Stay in LD_REQ for next transfer
             addr_last_d = data_addr;
           end
         end else begin
-          st_state_d = ST_WAIT_GNT;
+          st_state_d = LD_WAIT_GNT;
         end
       end
     endcase
@@ -413,18 +305,20 @@ module vector_load_unit (
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       st_error_q <= '0;
-      st_state_q <= ST_IDLE;
+      st_state_q <= LD_IDLE;
       gnt_cnt_q <= '0;
       valid_cnt_q <= '0;
-      last_rf_data_q <= '0;
-      last_mask_q <= '0;
+      result_q <= '0;
+      // last_rf_data_q <= '0;
+      // last_mask_q <= '0;
     end else begin
       st_error_q <= st_error_d;
-      last_rf_data_q <= last_rf_data_d;
+      // last_rf_data_q <= last_rf_data_d;
       st_state_q <= st_state_d;
       gnt_cnt_q <= gnt_cnt_d;
       valid_cnt_q <= valid_cnt_d;
-      last_mask_q <= last_mask_d;
+      result_q <= result_d;
+      // last_mask_q <= last_mask_d;
     end
   end
 
