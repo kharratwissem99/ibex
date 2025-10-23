@@ -1,0 +1,79 @@
+cd /home/kharrat/Desktop/repos/ibex/examples/sw/simple_system/my_test_vectore_store_extended && ~/Downloads/lowrisc-toolchain-gcc-rv32imcb-x86_64-20250710-1/bin/riscv32-unknown-elf-objdump -h vector_test_comprehensive.elf
+
+vector_test_comprehensive.elf:     file format elf32-littleriscv
+
+Sections:
+Idx Name          Size      VMA       LMA       File off  Algn
+  0 .vectors      00000084  00100000  00100000  00001000  2**0
+                  CONTENTS, ALLOC, LOAD, READONLY, CODE
+  1 .text         00000442  00100084  00100084  00001084  2**1
+                  CONTENTS, ALLOC, LOAD, READONLY, CODE
+  2 .rodata       00000044  001004c8  001004c8  000014c8  2**2
+                  CONTENTS, ALLOC, LOAD, READONLY, DATA
+  3 .data         00000080  0010050c  0010050c  0000150c  2**0
+                  CONTENTS, ALLOC, LOAD, DATA
+  4 .bss          00000010  00100590  00100590  0000158c  2**3
+                  ALLOC
+  5 .stack        00002000  00130000  00130000  00002000  2**0
+                  ALLOC
+  6 .debug_info   0000056e  00000000  00000000  0000158c  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  7 .debug_abbrev 000002cc  00000000  00000000  00001afa  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  8 .debug_loc    00000158  00000000  00000000  00001dc6  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+  9 .debug_aranges 00000068  00000000  00000000  00001f20  2**3
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+ 10 .debug_ranges 00000090  00000000  00000000  00001f88  2**3
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+ 11 .debug_line   00000944  00000000  00000000  00002018  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+ 12 .debug_str    00000327  00000000  00000000  0000295c  2**0
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+ 13 .comment      00000026  00000000  00000000  00002c83  2**0
+                  CONTENTS, READONLY
+ 14 .riscv.attributes 0000002a  00000000  00000000  00002ca9  2**0
+                  CONTENTS, READONLY
+ 15 .debug_frame  00000170  00000000  00000000  00002cd4  2**2
+                  CONTENTS, READONLY, DEBUGGING, OCTETS
+
+cd /home/kharrat/Desktop/repos/ibex/examples/sw/simple_system/my_test_vectore_store_extended && ~/Downloads/lowrisc-toolchain-gcc-rv32imcb-x86_64-20250710-1/bin/riscv32-unknown-elf-nm vector_test_comprehensive.elf
+001005a0 B _bss_end
+00100590 B _bss_start
+0010050c d data_section
+0010043e t default_exc_handler
+00100080 A _entry_point
+00138010 A fromhost
+001002aa T get_elapsed_time
+001001d2 T get_mcause
+001001cc T get_mepc
+001001d8 T get_mtval
+0010033e T main
+001004ac t main_entry
+00002000 A _min_stack
+001000d2 T pcount_reset
+00100084 T putchar
+001000a4 T puthex
+00100090 T puts
+00100446 t reset_handler
+001000c8 T sim_halt
+001001de T simple_exc_handler
+001002b8 T simple_timer_handler
+001004c0 t sleep_loop
+00132000 B _stack
+00132000 B stack
+00008000 A _stack_len
+00138000 T _stack_start
+0010048e T _start
+0010024e T timecmp_update
+00100598 B time_elapsed
+00100590 B time_increment
+00100234 T timer_disable
+0010025c T timer_enable
+00100442 t timer_handler
+0010023e T timer_read
+00020008 A tohost
+00100084 T _vectors_end
+00100000 T _vectors_start
+001004a2 t zero_loop
+001004ac t zero_loop_end
