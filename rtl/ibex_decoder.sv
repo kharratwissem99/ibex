@@ -651,28 +651,68 @@ module ibex_decoder #(
       // Vector Store   //
       ////////////////////
       OPCODE_VECTOR: begin
-        // Only handle vector store instructions (vse8.v, vse16.v, vse32.v)
+        // Vector Store instructions (vse8.v, vse16.v, vse32.v)
         // Unit-stride vector stores have mop[2:0] = 000, so bits[28:26] = 000
-        if (instr[14:12] == 3'b000 && instr[31:20] == 12'b0) begin // vse8.v
-          rf_ren_a_o         = 1'b1;  // Base address from rs1 todo: check maybe unused in our configuration
-          data_req_vs_o      = 1'b1;  // Request memory access // note: we can't use the same data_req_o because it will trigger the scalar lsu. it can be used analog to data_req_o to trigger the vector LSU
-          data_we_o          = 1'b1;  // Write enable
-          data_type_o        = 2'b10; // Byte access (like sb) // todo: for it is ok but in the future we will connct this directly to vector_store_unit. see core 
-          lsu_mux_o = 1'b1;
-        end else if (instr[14:12] == 3'b101 && instr[31:20] == 12'b0) begin // vse16.v  
-          rf_ren_a_o         = 1'b1;
-          data_req_vs_o      = 1'b1;
-          data_we_o          = 1'b1;
-          data_type_o        = 2'b01; // Half-word access (like sh)
-          lsu_mux_o = 1'b1;
-        end else if (instr[14:12] == 3'b110 && instr[31:20] == 12'b0) begin // vse32.v
-          rf_ren_a_o         = 1'b1;
-          data_req_vs_o      = 1'b1;  
-          data_we_o          = 1'b1;
-          data_type_o        = 2'b00; // Word access (like sw)
-          lsu_mux_o = 1'b1;
+        if (instr[31:20] == 12'b0) begin // Unit-stride stores (mop=000, nf=0)
+          if (instr[14:12] == 3'b000) begin // vse8.v
+            rf_ren_a_o         = 1'b1;  // Base address from rs1
+            data_req_vs_o      = 1'b1;  // Request vector memory access
+            data_we_o          = 1'b1;  // Write enable
+            data_type_o        = 2'b10; // Byte access (like sb)
+            lsu_mux_o          = 1'b1;
+          end else if (instr[14:12] == 3'b101) begin // vse16.v  
+            rf_ren_a_o         = 1'b1;
+            data_req_vs_o      = 1'b1;
+            data_we_o          = 1'b1;
+            data_type_o        = 2'b01; // Half-word access (like sh)
+            lsu_mux_o          = 1'b1;
+          end else if (instr[14:12] == 3'b110) begin // vse32.v
+            rf_ren_a_o         = 1'b1;
+            data_req_vs_o      = 1'b1;  
+            data_we_o          = 1'b1;
+            data_type_o        = 2'b00; // Word access (like sw)
+            lsu_mux_o          = 1'b1;
+          end else begin
+            illegal_insn = 1'b1; // Unsupported vector store width
+          end
         end else begin
-          illegal_insn = 1'b1; // Unsupported vector instruction
+          illegal_insn = 1'b1; // Unsupported vector store format
+        end
+      end
+
+      //////////////////////
+      // Vector Load       //
+      //////////////////////
+      OPCODE_VECTOR_LOAD: begin
+        // Vector Load instructions (vle8.v, vle16.v, vle32.v)
+        // Unit-stride vector loads have mop[2:0] = 000, so bits[28:26] = 000
+        if (instr[31:20] == 12'b0) begin // Unit-stride loads (mop=000, nf=0)
+          if (instr[14:12] == 3'b000) begin // vle8.v
+            rf_ren_a_o         = 1'b1;  // Base address from rs1
+            data_req_vs_o      = 1'b1;  // Request vector memory access
+            data_we_o          = 1'b0;  // Read enable (no write)
+            data_type_o        = 2'b10; // Byte access (like lb)
+            // data_sign_extension_o = 1'b0; // Zero extend for vector loads TODO: Why do we need this signal ?
+            lsu_mux_o          = 1'b1;
+          end else if (instr[14:12] == 3'b101) begin // vle16.v
+            rf_ren_a_o         = 1'b1;
+            data_req_vs_o      = 1'b1;
+            data_we_o          = 1'b0;
+            data_type_o        = 2'b01; // Half-word access (like lh)
+            // data_sign_extension_o = 1'b0; // Zero extend for vector loads TODO: Why do we need this signal ?
+            lsu_mux_o          = 1'b1;
+          end else if (instr[14:12] == 3'b110) begin // vle32.v
+            rf_ren_a_o         = 1'b1;
+            data_req_vs_o      = 1'b1;
+            data_we_o          = 1'b0;
+            data_type_o        = 2'b00; // Word access (like lw)
+            // data_sign_extension_o = 1'b0; // Zero extend for vector loads TODO: Why do we need this signal ?
+            lsu_mux_o          = 1'b1;
+          end else begin
+            illegal_insn = 1'b1; // Unsupported vector load width
+          end
+        end else begin
+          illegal_insn = 1'b1; // Unsupported vector load format
         end
       end
 
@@ -840,7 +880,7 @@ module ibex_decoder #(
       ////////////////////
       OPCODE_VECTOR: begin
         alu_op_a_mux_sel_o = OP_A_REG_A;
-        alu_op_b_mux_sel_o = OP_B_REG_B;
+        alu_op_b_mux_sel_o = OP_B_REG_B; // TODO: check this. What if REG_B contains a garbage Value
         alu_operator_o     = ALU_ADD;
 
         // if (!instr_alu[14]) begin
@@ -848,6 +888,18 @@ module ibex_decoder #(
         //   imm_b_mux_sel_o     = IMM_B_S;
         //   alu_op_b_mux_sel_o  = OP_B_IMM;
         // end
+      end
+
+      ////////////////////
+      // Vector Load    //
+      ////////////////////
+      OPCODE_VECTOR_LOAD: begin
+        alu_op_a_mux_sel_o = OP_A_REG_A;
+        alu_op_b_mux_sel_o = OP_B_REG_B; // TODO: check this. What if REG_B contains a garbage Value
+        alu_operator_o     = ALU_ADD;
+        
+        // Vector loads use the same address calculation as stores
+        // Base address + increment for sequential access
       end
 
       /////////

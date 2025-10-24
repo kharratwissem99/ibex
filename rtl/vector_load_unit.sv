@@ -222,10 +222,12 @@ module vector_load_unit (
             
             if (anzahl_req >= 4) begin
                 // For 4+ requests: just shift by alignment offset
-                wr_wdata_o = (assembled_data >> (data_offset * 8))[127:0];
+                // wr_wdata_o = (assembled_data >> (data_offset * 8))[127:0];
+                wr_wdata_o = (assembled_data >> (data_offset * 8));
             end else begin
                 // For <4 requests: shift by alignment + position adjustment
-                wr_wdata_o = (assembled_data >> (data_offset * 8 + 32 * (4 - anzahl_req)))[127:0];
+                // wr_wdata_o = (assembled_data >> (data_offset * 8 + 32 * (4 - anzahl_req)))[127:0];
+                wr_wdata_o = (assembled_data >> (data_offset * 8 + 32 * (4 - anzahl_req)));
             end
 
         end else begin

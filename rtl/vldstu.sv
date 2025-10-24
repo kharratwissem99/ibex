@@ -56,29 +56,57 @@ module vldstu #(
   // Store Unit signals
   logic        st_resp_valid;
   logic [31:0] st_addr_last;
+  logic        st_data_req;
+  logic [31:0] st_data_addr;
+  logic        st_data_we;
+  logic [3:0]  st_data_be;
+  logic [31:0] st_data_wdata;
+  logic        st_addr_incr_req;
 
-  // Load Unit signals (tied off for now)
+  // Load Unit signals
   logic        ld_resp_valid;
   logic [31:0] ld_addr_last;
+  logic        ld_data_req;
+  logic [31:0] ld_data_addr;
+  logic        ld_addr_incr_req;
 
   // Request routing based on operation type
   assign st_req = v_req_i & v_we_i;   // Store request
-  assign ld_req = 1'b0;               // Load disabled for now (v_req_i & ~v_we_i) TODO: connect
+  assign ld_req = v_req_i & ~v_we_i;  // Load request (now enabled in Phase 2)
 
-  // Response aggregation
-  //assign v_ready_o = ~busy_o;                    // Ready when not busy // TODO: should we use it?
-  assign v_done_o  = st_done | ld_done;         // Done when either completes TODO: or should we use a MUX?
-  assign v_err_o   = st_err | ld_err;           // Error from either unit TODO: should we use a MUX?
-  assign busy_o    = st_busy | ld_busy;         // Busy when either is active TODO: should we use a MUX?
+  // Response aggregation - use OR gates since only one unit is active at a time
+  assign v_done_o  = st_done | ld_done;         // Done when either completes
+  assign v_err_o   = st_err | ld_err;           // Error from either unit
+  assign busy_o    = st_busy | ld_busy;         // Busy when either is active
 
-  // Address last multiplexing (store has priority for now)
-  assign addr_last_o = st_busy ? st_addr_last : ld_addr_last; //TODO TODO: check this and be carefull. Using a MUX is a good choice, but st_busy as control signal may not work??
+  // Address last multiplexing - priority to the active unit
+  assign addr_last_o = st_busy ? st_addr_last : ld_addr_last; // TODO: please check this, since can lead to a undefined behaviour
 
-  // Load Unit outputs (tied off for Phase 1) TODO: connect both when adding the load instance
-  assign vrf_we_o    = 1'b0;
-  assign vrf_wdata_o = '0;
+  // Memory interface multiplexing - controlled by which unit is active
+  logic        mem_data_req;
+  logic [31:0] mem_data_addr;
+  logic        mem_data_we;
+  logic [3:0]  mem_data_be;
+  logic [31:0] mem_data_wdata;
 
-  assign resp_valid_o = st_resp_valid | ld_resp_valid; //TODO: should we use a MUX or OR gatter.
+  // Only one unit can be active at a time, so simple OR gates work
+  assign mem_data_req   = st_data_req | ld_data_req;
+  assign mem_data_addr  = st_busy ? st_data_addr : ld_data_addr; // TODO: please check this, since can lead to a undefined behaviour
+  assign mem_data_we    = st_data_we;  // Load unit never writes
+  assign mem_data_be    = st_data_be;  // Load unit doesn't use byte enables
+  assign mem_data_wdata = st_data_wdata;
+
+  // Connect multiplexed signals to output
+  assign data_req_o   = mem_data_req;
+  assign data_addr_o  = mem_data_addr;
+  assign data_we_o    = mem_data_we;
+  assign data_be_o    = mem_data_be;
+  assign data_wdata_o = mem_data_wdata;
+
+  // Address increment request - OR both units
+  assign addr_incr_req_o = st_addr_incr_req | ld_addr_incr_req;
+
+  assign resp_valid_o = st_resp_valid | ld_resp_valid;
 
   //=============================================================================
   // Vector Store Unit Instance
@@ -98,7 +126,7 @@ module vldstu #(
     .busy_o             (st_busy),
     
     // Address management
-    .addr_incr_req_o    (addr_incr_req_o), // TODO: for now it is ok but when adding the load Unit this shoulb be changed using a MUX or and OR gatter
+    .addr_incr_req_o    (st_addr_incr_req),
     .addr_last_o        (st_addr_last),
     .st_resp_valid_o    (st_resp_valid),
     
@@ -106,22 +134,20 @@ module vldstu #(
     .rd_rdata_i         (vrf_rdata_i),
     
     // Memory interface
-    .data_req_o         (data_req_o), // TODO: for now it is also okay but later this signals should be multiplexed when adding the load Unit
-    .data_addr_o        (data_addr_o),
-    .data_we_o          (data_we_o),
-    .data_be_o          (data_be_o),
-    .data_wdata_o       (data_wdata_o),
+    .data_req_o         (st_data_req),
+    .data_addr_o        (st_data_addr),
+    .data_we_o          (st_data_we),
+    .data_be_o          (st_data_be),
+    .data_wdata_o       (st_data_wdata),
     .data_gnt_i         (data_gnt_i),
     .data_rvalid_i      (data_rvalid_i),
     .data_err_i         (data_err_i)
   );
 
   //=============================================================================
-  // Vector Load Unit Instance (Phase 2 - Currently Disabled)
+  // Vector Load Unit Instance (Phase 2 - Now Enabled)
   //=============================================================================
   
-  // TODO: Uncomment in Phase 2 when adding load support
-  /*
   vector_load_unit u_vector_load (
     .clk_i              (clk_i),
     .rst_ni             (rst_ni),
@@ -136,7 +162,7 @@ module vldstu #(
     .busy_o             (ld_busy),
     
     // Address management
-    .addr_incr_req_o    (), // Will be OR'd with store unit
+    .addr_incr_req_o    (ld_addr_incr_req),
     .addr_last_o        (ld_addr_last),
     .ld_resp_valid_o    (ld_resp_valid),
     
@@ -145,36 +171,33 @@ module vldstu #(
     .wr_wdata_o         (vrf_wdata_o),
     
     // Memory interface
-    .data_req_o         (), // Will be OR'd with store unit  
-    .data_addr_o        (), // Muxed with store unit
-    .data_we_o          (), // Always 0 for loads
-    .data_be_o          (), // Not used for loads
-    .data_wdata_o       (), // Not used for loads
+    .data_req_o         (ld_data_req),
+    .data_addr_o        (ld_data_addr),
+    .data_we_o          (),  // Not used for loads (always 0)
+    .data_be_o          (),  // Not used for loads
+    .data_wdata_o       (),  // Not used for loads
     .data_gnt_i         (data_gnt_i),
     .data_rvalid_i      (data_rvalid_i),
     .data_err_i         (data_err_i),
     .data_rdata_i       (data_rdata_i)
   );
-  */
-
-  // Load Unit tied off for Phase 1
-  assign ld_done = 1'b0;
-  assign ld_err = 1'b0;  
-  assign ld_busy = 1'b0;
-  assign ld_addr_last = 32'b0;
-  assign ld_resp_valid = 1'b0;
 
   // Assertions for debugging
   `ifdef SIMULATION
-    // Ensure only one unit is active at a time (for Phase 1)
+    // Ensure only one unit is active at a time
     assert property (@(posedge clk_i) disable iff (!rst_ni) 
                      !(st_busy && ld_busy)) 
       else $error("Both store and load units busy simultaneously");
     
     // Check request/response protocol
     assert property (@(posedge clk_i) disable iff (!rst_ni)
-                     v_req_i && v_ready_o |=> ##[1:$] v_done_o)
-      else $warning("Vector request accepted but never completed");
+                     v_req_i |=> ##[1:$] v_done_o)
+      else $warning("Vector request never completed");
+      
+    // Verify exclusive operation (only one unit should be requested at a time)
+    assert property (@(posedge clk_i) disable iff (!rst_ni)
+                     v_req_i |-> (v_we_i ^ ~v_we_i))
+      else $error("Invalid vector operation: both store and load requested");
   `endif
 
 endmodule

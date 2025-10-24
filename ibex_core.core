@@ -36,6 +36,7 @@ filesets:
       - rtl/ibex_wb_stage.sv
       - rtl/ibex_dummy_instr.sv
       - rtl/ibex_vrf.sv
+      - rtl/vector_load_unit.sv
       - rtl/vector_store_unit.sv
       - rtl/vldstu.sv
       - rtl/ibex_core.sv

@@ -263,6 +263,11 @@ module ibex_core import ibex_pkg::*; #(
   logic [4:0]   vrf_rd_vreg_a;
   logic [4:0]   vrf_rd_vreg_b;
 
+  // Vector Load/Store Unit write signals for VRF
+  logic         vldstu_vrf_we;
+  logic [127:0] vldstu_vrf_wdata;
+  logic [4:0]   vldstu_vrf_waddr;
+
   // Jump and branch target and decision (EX->IF)
   logic [31:0] branch_target_ex;
   logic        branch_decision;
@@ -828,6 +833,9 @@ module ibex_core import ibex_pkg::*; #(
   // Set vector register to read (vs3 field = instr[24:20])
   assign vrf_rd_vreg_a = instr_rdata_id[11:7]; // for vector register instruction unlike the the scalar store
   assign vrf_rd_en_a = 1'b1; // Always enable for now to ensure data is available
+
+  // Vector load instructions write to vd field (rd = instr[11:7])
+  assign vldstu_vrf_waddr = instr_rdata_id[11:7]; // vd field for vector loads
   assign lsu_addr_incr_req_shared = lsu_addr_incr_req || vsu_addr_incr_req; //todo: es ist for now ok because vector store unit and scalar lsu will not work together 
 
   always_comb begin
@@ -903,11 +911,11 @@ module ibex_core import ibex_pkg::*; #(
     .clk_i(clk_i),
     .rst_ni(rst_ni),
     
-    // Write interface (not connected for now, would be used by vector load instructions)
-    .wr_en_i(1'b0),
-    .wr_vreg_i(5'b0),
-    .wr_wdata_i(128'b0),
-    .wr_wstrb_i(16'b0),
+    // Write interface - now connected to vector load/store unit
+    .wr_en_i(vldstu_vrf_we),
+    .wr_vreg_i(vldstu_vrf_waddr),
+    .wr_wdata_i(vldstu_vrf_wdata),
+    .wr_wstrb_i(16'hFFFF),  // Write all bytes for now (full vector register)
     
     // Read port A for vector store unit
     .rd_en_a_i(vrf_rd_en_a),
@@ -931,8 +939,8 @@ module ibex_core import ibex_pkg::*; #(
     .rst_ni(rst_ni),
     
     // Vector operation interface
-    .v_req_i(vst_req),           // Vector memory request
-    .v_we_i(1'b1),               // Always store for Phase 1
+    .v_req_i(vst_req),           // Vector memory request (both loads and stores)
+    .v_we_i(lsu_we),             // 1=store, 0=load (from decoder) TODO: be aware this signal comes from id stage and goes also to the load store unit. this is not safe at all
     .v_addr_i(alu_adder_result_ex),
     .v_vl_i(5'b00100),          // Hard-coded VL=4 for testing
     .v_sew_i(lsu_type[1:0] == 2'b10 ? 3'b000 :   // sb -> SEW=8
@@ -945,8 +953,8 @@ module ibex_core import ibex_pkg::*; #(
     
     // Vector register file interface
     .vrf_rdata_i(vrf_rd_rdata_a),    // For stores
-    .vrf_we_o(),                     // Not used in Phase 1 
-    .vrf_wdata_o(),                  // Not used in Phase 1
+    .vrf_we_o(vldstu_vrf_we),        // For loads - now connected
+    .vrf_wdata_o(vldstu_vrf_wdata),  // For loads - now connected
     
     .addr_incr_req_o(vsu_addr_incr_req),
     .addr_last_o(st_addr_last),
@@ -961,7 +969,7 @@ module ibex_core import ibex_pkg::*; #(
     .data_gnt_i(data_gnt_i),
     .data_rvalid_i(data_rvalid_vector_i),
     .data_err_i(data_err_i),
-    .data_rdata_i(data_rdata_i),     // For future loads
+    .data_rdata_i(data_rdata_i),     // For loads - now connected
     
     .busy_o(vsu_busy)
   );
