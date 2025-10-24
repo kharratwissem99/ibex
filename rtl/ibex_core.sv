@@ -51,7 +51,8 @@ module ibex_core import ibex_pkg::*; #(
   // mvendorid: encoding of manufacturer/provider
   parameter logic [31:0]            CsrMvendorId     = 32'b0,
   // marchid: encoding of base microarchitecture
-  parameter logic [31:0]            CsrMimpId        = 32'b0
+  parameter logic [31:0]            CsrMimpId        = 32'b0,
+  parameter int unsigned VLEN = 128
 ) (
   // Clock and Reset
   input  logic                         clk_i,
@@ -920,34 +921,38 @@ module ibex_core import ibex_pkg::*; #(
   );
 
   ///////////////////////////////
-  // Vector Store Unit         //
+  // Vector Load/Store Unit    //
   ///////////////////////////////
 
-  vector_store_unit vector_store_unit_i (
+  vldstu #(
+    .VLEN(VLEN)
+  ) vldstu_i (
     .clk_i(clk_i),
     .rst_ni(rst_ni),
     
-    .adder_result_ex_i(alu_adder_result_ex),
-    .vl_i(5'b00100),  // Hard-coded VL=4 for testing
-    .request_type_i(lsu_type[1:0] == 2'b10 ? 3'b000 :   // sb -> SEW=8
-                    lsu_type[1:0] == 2'b01 ? 3'b101 :   // sh -> SEW=16
-                    lsu_type[1:0] == 2'b00 ? 3'b010 :   // sw -> SEW=32
-                    3'b000),                             // default SEW=8
+    // Vector operation interface
+    .v_req_i(vst_req),           // Vector memory request
+    .v_we_i(1'b1),               // Always store for Phase 1
+    .v_addr_i(alu_adder_result_ex),
+    .v_vl_i(5'b00100),          // Hard-coded VL=4 for testing
+    .v_sew_i(lsu_type[1:0] == 2'b10 ? 3'b000 :   // sb -> SEW=8
+             lsu_type[1:0] == 2'b01 ? 3'b101 :   // sh -> SEW=16
+             lsu_type[1:0] == 2'b00 ? 3'b010 :   // sw -> SEW=32
+             3'b000),                             // default SEW=8
     
-    .addr_incr_req_o(vsu_addr_incr_req), // Todo: Connect this signal
+    .v_done_o(vsu_st_done),
+    .v_err_o(vsu_store_err),
     
-    .st_req(vst_req),
-    .st_done(vsu_st_done),
-    .store_err_o(vsu_store_err),
+    // Vector register file interface
+    .vrf_rdata_i(vrf_rd_rdata_a),    // For stores
+    .vrf_we_o(),                     // Not used in Phase 1 
+    .vrf_wdata_o(),                  // Not used in Phase 1
     
-    // VRF interface
-    .rd_rdata_i(vrf_rd_rdata_a),
-
-    .addr_last_o    (st_addr_last),
-
-    .st_resp_valid_o(st_resp_valid),
+    .addr_incr_req_o(vsu_addr_incr_req),
+    .addr_last_o(st_addr_last),
+    .resp_valid_o(st_resp_valid),
     
-    // Memory interface (connected to mux)
+    // Memory interface
     .data_req_o(vsu_data_req),
     .data_addr_o(vsu_data_addr),  
     .data_we_o(vsu_data_we),
@@ -956,6 +961,7 @@ module ibex_core import ibex_pkg::*; #(
     .data_gnt_i(data_gnt_i),
     .data_rvalid_i(data_rvalid_vector_i),
     .data_err_i(data_err_i),
+    .data_rdata_i(data_rdata_i),     // For future loads
     
     .busy_o(vsu_busy)
   );
