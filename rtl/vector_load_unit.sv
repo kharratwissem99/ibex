@@ -1,3 +1,5 @@
+// todo verifizieren durch ein paar Testfälle
+
 module vector_load_unit (
   input  logic         clk_i,
   input  logic         rst_ni,
@@ -186,7 +188,7 @@ module vector_load_unit (
     //end
   end
 
-    logic [127 + 32:0] big_data;
+    logic [127 + 32:0] assembled_data;
     always_comb begin
         // Default assignments to prevent latches
         valid_cnt_d = valid_cnt_q;
@@ -202,16 +204,29 @@ module vector_load_unit (
             last_valid = 1'b1;
             valid_cnt_d = 2'd0; // Reset for next operation
             wr_en_o = 1'b1;
+            result_d = '0;
+            
+            // OLD CODE - kept for reference:
             // if (anzahl_req == 1) wr_wdata_o = {95'b0, data_rdata_i} >> (data_offset * 8);
             // else if (anzahl_req == 2) wr_wdata_o = {95'b0, data_rdata_i, } >> (data_offset * 8);
             // result_d = {data_rdata_i, result_q[127:32]};
-            result_d = '0;
-            if (anzahl_req == 5) begin // todo: check this
-                big_data = {data_rdata_i & last_mask, result_q};
-                big_data = big_data >> (data_offset * 8);
-                wr_wdata_o = big_data[127:0];
+            // Special case logic:
+            // if (anzahl_req == 5) begin 
+            //     big_data = {data_rdata_i & last_mask, result_q};
+            //     big_data = big_data >> (data_offset * 8);
+            //     wr_wdata_o = big_data[127:0];
+            // end
+            // else wr_wdata_o = {data_rdata_i & last_mask, result_q[127:32]} >> (32 * (4 - anzahl_req) + data_offset * 8);
+            // Build full assembled data from all memory responses
+            assembled_data = {data_rdata_i & last_mask, result_q};
+            
+            if (anzahl_req >= 4) begin
+                // For 4+ requests: just shift by alignment offset
+                wr_wdata_o = (assembled_data >> (data_offset * 8))[127:0];
+            end else begin
+                // For <4 requests: shift by alignment + position adjustment
+                wr_wdata_o = (assembled_data >> (data_offset * 8 + 32 * (4 - anzahl_req)))[127:0];
             end
-            else wr_wdata_o = {data_rdata_i & last_mask, result_q[127:32]} >> (32 * (4 - anzahl_req) + data_offset * 8);
 
         end else begin
             valid_cnt_d = valid_cnt_q + 1;
