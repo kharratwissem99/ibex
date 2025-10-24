@@ -20,4 +20,5 @@ ibex_fetch_fifo.sv
 ibex_register_file_ff.sv
 ibex_vrf.sv
 vector_store_unit.sv
+vldstu.sv
 ibex_core.sv

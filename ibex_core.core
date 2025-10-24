@@ -37,6 +37,7 @@ filesets:
       - rtl/ibex_dummy_instr.sv
       - rtl/ibex_vrf.sv
       - rtl/vector_store_unit.sv
+      - rtl/vldstu.sv
       - rtl/ibex_core.sv
     file_type: systemVerilogSource
 
