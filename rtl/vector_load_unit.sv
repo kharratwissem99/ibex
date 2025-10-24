@@ -188,11 +188,15 @@ module vector_load_unit (
 
     logic [127 + 32:0] big_data;
     always_comb begin
+        // Default assignments to prevent latches
         valid_cnt_d = valid_cnt_q;
         last_valid = 1'b0;
         st_error_d = st_error_q;
+        result_d = result_q;
+        wr_en_o = 1'b0;
+        wr_wdata_o = '0;
         
-        if (data_rvalid_i && (~st_req)) begin
+        if (data_rvalid_i && (~ld_req)) begin
         if (data_err_i) st_error_d = 1'b1;
         if (valid_cnt_q + 1 == anzahl_req) begin //last valid signal
             last_valid = 1'b1;
@@ -201,6 +205,7 @@ module vector_load_unit (
             // if (anzahl_req == 1) wr_wdata_o = {95'b0, data_rdata_i} >> (data_offset * 8);
             // else if (anzahl_req == 2) wr_wdata_o = {95'b0, data_rdata_i, } >> (data_offset * 8);
             // result_d = {data_rdata_i, result_q[127:32]};
+            result_d = '0;
             if (anzahl_req == 5) begin // todo: check this
                 big_data = {data_rdata_i & last_mask, result_q};
                 big_data = big_data >> (data_offset * 8);
@@ -214,7 +219,7 @@ module vector_load_unit (
         end
         end
         
-        if (st_req && (st_state_q == LD_IDLE)) begin
+        if (ld_req && (st_state_q == LD_IDLE)) begin
         valid_cnt_d = 2'd0; // Reset at start
         st_error_d = 1'b0; // Reset error flag
         end
