@@ -189,6 +189,7 @@ module vector_load_unit (
   end
 
     logic [127 + 32:0] assembled_data;
+    logic [31:0] last_mask_32;
     always_comb begin
         // Default assignments to prevent latches
         valid_cnt_d = valid_cnt_q;
@@ -218,17 +219,21 @@ module vector_load_unit (
             // end
             // else wr_wdata_o = {data_rdata_i & last_mask, result_q[127:32]} >> (32 * (4 - anzahl_req) + data_offset * 8);
             // Build full assembled data from all memory responses
-            assembled_data = {data_rdata_i & last_mask, result_q};
+            // Convert 4-bit last_mask to 32-bit byte mask
+            last_mask_32 = {{8{last_mask[3]}}, {8{last_mask[2]}}, {8{last_mask[1]}}, {8{last_mask[0]}}};
             
-            if (anzahl_req >= 4) begin
-                // For 4+ requests: just shift by alignment offset
-                // wr_wdata_o = (assembled_data >> (data_offset * 8))[127:0];
-                wr_wdata_o = (assembled_data >> (data_offset * 8));
-            end else begin
-                // For <4 requests: shift by alignment + position adjustment
-                // wr_wdata_o = (assembled_data >> (data_offset * 8 + 32 * (4 - anzahl_req)))[127:0];
-                wr_wdata_o = (assembled_data >> (data_offset * 8 + 32 * (4 - anzahl_req)));
-            end
+            assembled_data = {data_rdata_i & last_mask_32, result_q};
+            
+            // if (anzahl_req >= 4) begin
+            //     // For 4+ requests: just shift by alignment offset
+            //     // wr_wdata_o = (assembled_data >> (data_offset * 8))[127:0];
+            //     wr_wdata_o = (assembled_data >> (data_offset * 8));
+            // end else begin
+            //     // For <4 requests: shift by alignment + position adjustment
+            //     // wr_wdata_o = (assembled_data >> (data_offset * 8 + 32 * (4 - anzahl_req)))[127:0];
+            //     wr_wdata_o = (assembled_data >> (data_offset * 8 + 32 * (5 - anzahl_req)));
+            // end
+            wr_wdata_o = (assembled_data >> (data_offset * 8 + 32 * (5 - anzahl_req)));
 
         end else begin
             valid_cnt_d = valid_cnt_q + 1;
