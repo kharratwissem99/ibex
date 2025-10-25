@@ -198,7 +198,7 @@ module vector_load_unit (
         wr_en_o = 1'b0;
         wr_wdata_o = '0;
         
-        if (data_rvalid_i && (~ld_req)) begin
+        if (data_rvalid_i & (~ld_req)) begin
         if (data_err_i) st_error_d = 1'b1;
         if (valid_cnt_q + 1 == anzahl_req) begin //last valid signal
             last_valid = 1'b1;

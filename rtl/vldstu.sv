@@ -76,11 +76,11 @@ module vldstu #(
 
   // Response aggregation - use OR gates since only one unit is active at a time
   assign v_done_o  = st_done | ld_done;         // Done when either completes
-  assign v_err_o   = st_err | ld_err;           // Error from either unit
+  assign v_err_o   = st_err | ld_err;           // Error from either unit TODO: why it gives back an error
   assign busy_o    = st_busy | ld_busy;         // Busy when either is active
 
   // Address last multiplexing - priority to the active unit
-  assign addr_last_o = st_busy ? st_addr_last : ld_addr_last; // TODO: please check this, since can lead to a undefined behaviour
+  assign addr_last_o = st_busy ? st_addr_last : ld_addr_last; // TODO: please check this, since can lead to a undefined behaviour. mybe it is safe to use v_we_i
 
   // Memory interface multiplexing - controlled by which unit is active
   logic        mem_data_req;
@@ -91,7 +91,7 @@ module vldstu #(
 
   // Only one unit can be active at a time, so simple OR gates work
   assign mem_data_req   = st_data_req | ld_data_req;
-  assign mem_data_addr  = st_busy ? st_data_addr : ld_data_addr; // TODO: please check this, since can lead to a undefined behaviour
+  assign mem_data_addr  = v_we_i ? st_data_addr : ld_data_addr; // TODO: please check this, since can lead to a undefined behaviour. i think it is now fixed
   assign mem_data_we    = st_data_we;  // Load unit never writes
   assign mem_data_be    = st_data_be;  // Load unit doesn't use byte enables
   assign mem_data_wdata = st_data_wdata;
@@ -140,7 +140,7 @@ module vldstu #(
     .data_be_o          (st_data_be),
     .data_wdata_o       (st_data_wdata),
     .data_gnt_i         (data_gnt_i),
-    .data_rvalid_i      (data_rvalid_i),
+    .data_rvalid_i      (data_rvalid_i & v_we_i),
     .data_err_i         (data_err_i)
   );
 
@@ -177,7 +177,7 @@ module vldstu #(
     .data_be_o          (),  // Not used for loads
     .data_wdata_o       (),  // Not used for loads
     .data_gnt_i         (data_gnt_i),
-    .data_rvalid_i      (data_rvalid_i),
+    .data_rvalid_i      (data_rvalid_i & ~v_we_i),
     .data_err_i         (data_err_i),
     .data_rdata_i       (data_rdata_i)
   );
