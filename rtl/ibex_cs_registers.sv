@@ -1075,6 +1075,20 @@ module ibex_cs_registers #(
     .rd_error_o()
   );
 
+  // VL: vector lenght
+  ibex_csr #(
+    .Width     (32),
+    .ShadowCopy(1'b0),
+    .ResetValue('0)
+  ) u_vl_csr (
+    .clk_i     (clk_i),
+    .rst_ni    (rst_ni),
+    .wr_data_i (vl_d),
+    .wr_en_i   (vl_en),
+    .rd_data_o (vl_q), // TODO: connect this to the vector units
+    .rd_error_o()
+  );
+
   // -----------------
   // PMP registers
   // -----------------
