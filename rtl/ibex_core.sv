@@ -1261,6 +1261,8 @@ module ibex_core import ibex_pkg::*; #(
   end
   // assign csr_wdata  = alu_operand_a_ex;
 
+  logic [31:0] vl_unused;
+
   ibex_cs_registers #(
     .DbgTriggerEn     (DbgTriggerEn),
     .DbgHwBreakNum    (DbgHwBreakNum),
@@ -1315,6 +1317,8 @@ module ibex_core import ibex_pkg::*; #(
     .csr_mstatus_tw_o (csr_mstatus_tw),
     .csr_mepc_o       (csr_mepc),
     .csr_mtval_o      (crash_dump_mtval),
+
+    .csr_vl_o(vl_unused),
 
     // PMP
     .csr_pmp_cfg_o    (csr_pmp_cfg),

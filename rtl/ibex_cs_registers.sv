@@ -653,7 +653,7 @@ module ibex_cs_registers #(
         // mtvec
         CSR_MTVEC: mtvec_en = 1'b1;
 
-        CSR_VL: vl_en = = 1'b1;
+        CSR_VL: vl_en = 1'b1;
 
         CSR_DCSR: begin
           dcsr_d = csr_wdata_int;

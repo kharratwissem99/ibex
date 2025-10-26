@@ -127,6 +127,7 @@ module ibex_decoder #(
   logic v_rd_en;
   logic [31:0] vlmax;
   logic [2:0] sew;
+  logic is_vsetvli;
 
   csr_op_e     csr_op;
 
@@ -135,10 +136,11 @@ module ibex_decoder #(
 
   assign v_rs1_en = (instr_rs1 == 5'b0)? 0 : 1;
   assign v_rd_en  = (instr_rd == 5'b0)? 0 : 1;
-  assign sew = instr[22:20];
+  assign sew = instr[25:23];
   assign vlmax = 16 >> sew;
   assign v_rs1_en_o = v_rs1_en;
   assign vlmax_o = vlmax;
+  assign is_vsetvli_o = is_vsetvli;
 
   // To help timing the flops containing the current instruction are replicated to reduce fan-out.
   // instr_alu is used to determine the ALU control logic and associated operand/imm select signals
@@ -157,7 +159,11 @@ module ibex_decoder #(
   assign imm_u_type_o = { instr[31:12], 12'b0 };
   assign imm_j_type_o = { {12{instr[31]}}, instr[19:12], instr[20], instr[30:21], 1'b0 };
 
-  assign csr_addr_o = csr_num_e'(instr[31:20]);
+  always_comb begin
+    if (is_vsetvli) csr_addr_o = CSR_VL;
+    else csr_addr_o = csr_num_e'(instr[31:20]);
+  end
+  // assign csr_addr_o = csr_num_e'(instr[31:20]);
 
   // immediate for CSR manipulation (zero extended)
   assign zimm_rs1_type_o = { 27'b0, instr_rs1 }; // rs1
@@ -254,7 +260,7 @@ module ibex_decoder #(
     ecall_insn_o          = 1'b0;
     wfi_insn_o            = 1'b0;
 
-    is_vsetvli_o = 1'b0;
+    is_vsetvli = 1'b0;
     lsu_mux_o = 1'b0;
 
     opcode                = opcode_e'(instr[6:0]);
@@ -669,7 +675,7 @@ module ibex_decoder #(
       OPCODE_VSETVLI: begin
         // Vector Store instructions (vse8.v, vse16.v, vse32.v)
         // Unit-stride vector stores have mop[2:0] = 000, so bits[28:26] = 000
-        if ((instr[31] == 1'b0) && (instr[31:23] == 9'b0))begin // last bit is fixed and should be 0, see specification RVV 1.0 only sew is supported
+        if ((instr[31] == 1'b0) && (instr[31:26] == 6'b0) && (instr[22:20] == 3'b0))begin // last bit is fixed and should be 0, see specification RVV 1.0 only sew is supported
           if (instr[14:12] == 3'b111) begin // have also a fixed value and should be 111
             rf_ren_a_o         = 1'b1;  // Base address from rs1 //for rvfi and memecc todo: do we need these?
             // data_req_vs_o      = 1'b1;  // Request vector memory access
@@ -680,12 +686,11 @@ module ibex_decoder #(
             // if (v_rs1_en) rf_wdata_sel_o        = RF_WD_CUSTOM; // we don't need this we can manipulate the data comming from ex befor feeding it to the ID
             // else rf_wdata_sel_o        = RF_WD_VLMAX;
             rf_wdata_sel_o        = RF_WD_EX;
-            is_vsetvli_o = 1'b1;
+            is_vsetvli = 1'b1;
 
             // csr signals
             csr_access_o = v_rd_en | v_rs1_en;         // access to CSR
-            csr_op_o = CSR_OP_WRITE;              // operation to perform on CSR
-            csr_addr_o = CSR_VL;            // CSR address
+            csr_op = CSR_OP_WRITE;              // operation to perform on CSR
           end else begin
             illegal_insn = 1'b1; // Unsupported vector store width
           end

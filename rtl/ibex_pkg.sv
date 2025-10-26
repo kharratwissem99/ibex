@@ -69,7 +69,8 @@ package ibex_pkg;
     OPCODE_JAL      = 7'h6f,
     OPCODE_SYSTEM   = 7'h73,
     OPCODE_VECTOR   = 7'h27,  // opcode for vector store instruction
-    OPCODE_VECTOR_LOAD = 7'h07  // opcode for vector load instruction
+    OPCODE_VECTOR_LOAD = 7'h07,  // opcode for vector load instruction
+    OPCODE_VSETVLI = 7'h57
   } opcode_e;
 
 
