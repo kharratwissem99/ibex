@@ -425,6 +425,9 @@ module ibex_core import ibex_pkg::*; #(
   // for RVFI
   logic        illegal_insn_id, unused_illegal_insn_id; // ID stage sees an illegal instruction
 
+  logic is_vsetvli;
+  logic v_rs1_en;
+  logic [31:0] result_ex_custom;
   //////////////////////
   // Clock management //
   //////////////////////
@@ -718,7 +721,7 @@ module ibex_core import ibex_pkg::*; #(
     .trigger_match_i      (trigger_match),
 
     // write data to commit in the register file
-    .result_ex_i(result_ex),
+    .result_ex_i(result_ex_custom), // todo: in the future handle vsetvli internally
     .csr_rdata_i(csr_rdata),
 
     .rf_raddr_a_o      (rf_raddr_a),
@@ -751,8 +754,22 @@ module ibex_core import ibex_pkg::*; #(
     .perf_dside_wait_o(perf_dside_wait),
     .perf_mul_wait_o  (perf_mul_wait),
     .perf_div_wait_o  (perf_div_wait),
-    .instr_id_done_o  (instr_id_done)
+    .instr_id_done_o  (instr_id_done),
+
+    .is_vsetvli_o(is_vsetvli),
+    .v_rs1_en_o(v_rs1_en)
   );
+
+  always_comb begin
+    if (is_vsetvli) begin
+      if (v_rs1_en) begin
+        if (~result_ex) result_ex_custom = alu_operand_b_ex; // alu_operand_b_ex should be vlmax
+        else result_ex_custom = rf_rdata_a;
+      end
+      else result_ex_custom = alu_operand_b_ex; // alu_operand_b_ex should be vlmax
+    end
+    else result_ex_custom = result_ex;
+  end
 
   // for RVFI only
   assign unused_illegal_insn_id = illegal_insn_id;
@@ -1238,8 +1255,11 @@ module ibex_core import ibex_pkg::*; #(
   /////////////////////////////////////////
   // CSRs (Control and Status Registers) //
   /////////////////////////////////////////
-
-  assign csr_wdata  = alu_operand_a_ex;
+  always_comb begin
+    if (is_vsetvli) csr_wdata = result_ex_custom;
+    else csr_wdata  = alu_operand_a_ex;
+  end
+  // assign csr_wdata  = alu_operand_a_ex;
 
   ibex_cs_registers #(
     .DbgTriggerEn     (DbgTriggerEn),

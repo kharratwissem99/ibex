@@ -63,7 +63,10 @@ module ibex_decoder #(
   output logic                 rf_ren_a_o,          // Instruction reads from RF addr A
   output logic                 rf_ren_b_o,          // Instruction reads from RF addr B
 
-  output logic                 lsu_mux_o,          // Instruction reads from RF addr B
+  output logic                 lsu_mux_o,
+  output logic                 is_vsetvli_o,
+  output logic                 v_rs1_en_o,
+  output logic [31:0]          vlmax_o,
 
   // ALU
   output ibex_pkg::alu_op_e    alu_operator_o,        // ALU operation selection
@@ -120,10 +123,22 @@ module ibex_decoder #(
   logic        use_rs3_d;
   logic        use_rs3_q;
 
+  logic v_rs1_en;
+  logic v_rd_en;
+  logic [31:0] vlmax;
+  logic [2:0] sew;
+
   csr_op_e     csr_op;
 
   opcode_e     opcode;
   opcode_e     opcode_alu;
+
+  assign v_rs1_en = (instr_rs1 == 5'b0)? 0 : 1;
+  assign v_rd_en  = (instr_rd == 5'b0)? 0 : 1;
+  assign sew = instr[22:20];
+  assign vlmax = 16 >> sew;
+  assign v_rs1_en_o = v_rs1_en;
+  assign vlmax_o = vlmax;
 
   // To help timing the flops containing the current instruction are replicated to reduce fan-out.
   // instr_alu is used to determine the ALU control logic and associated operand/imm select signals
@@ -239,6 +254,7 @@ module ibex_decoder #(
     ecall_insn_o          = 1'b0;
     wfi_insn_o            = 1'b0;
 
+    is_vsetvli_o = 1'b0;
     lsu_mux_o = 1'b0;
 
     opcode                = opcode_e'(instr[6:0]);
@@ -650,6 +666,37 @@ module ibex_decoder #(
       ////////////////////
       // Vector Store   //
       ////////////////////
+      OPCODE_VSETVLI: begin
+        // Vector Store instructions (vse8.v, vse16.v, vse32.v)
+        // Unit-stride vector stores have mop[2:0] = 000, so bits[28:26] = 000
+        if ((instr[31] == 1'b0) && (instr[31:23] == 9'b0))begin // last bit is fixed and should be 0, see specification RVV 1.0 only sew is supported
+          if (instr[14:12] == 3'b111) begin // have also a fixed value and should be 111
+            rf_ren_a_o         = 1'b1;  // Base address from rs1 //for rvfi and memecc todo: do we need these?
+            // data_req_vs_o      = 1'b1;  // Request vector memory access
+            // data_we_o          = 1'b1;  // Write enable
+            // data_type_o        = 2'b10; // Byte access (like sb)
+            // lsu_mux_o          = 1'b1;
+            if (v_rd_en) rf_we           = 1'b1; // maybe the RF have a safety mecanism and we don't to check this
+            // if (v_rs1_en) rf_wdata_sel_o        = RF_WD_CUSTOM; // we don't need this we can manipulate the data comming from ex befor feeding it to the ID
+            // else rf_wdata_sel_o        = RF_WD_VLMAX;
+            rf_wdata_sel_o        = RF_WD_EX;
+            is_vsetvli_o = 1'b1;
+
+            // csr signals
+            csr_access_o = v_rd_en | v_rs1_en;         // access to CSR
+            csr_op_o = CSR_OP_WRITE;              // operation to perform on CSR
+            csr_addr_o = CSR_VL;            // CSR address
+          end else begin
+            illegal_insn = 1'b1; // Unsupported vector store width
+          end
+        end else begin
+          illegal_insn = 1'b1; // Unsupported vector store format
+        end
+      end
+
+      ////////////////////
+      // Vector Store   //
+      ////////////////////
       OPCODE_VECTOR: begin
         // Vector Store instructions (vse8.v, vse16.v, vse32.v)
         // Unit-stride vector stores have mop[2:0] = 000, so bits[28:26] = 000
@@ -878,9 +925,27 @@ module ibex_decoder #(
       ////////////////////
       // Vector Store   //
       ////////////////////
+      OPCODE_VSETVLI: begin
+        alu_op_a_mux_sel_o = OP_A_REG_A; // this schould contain the AVL
+        // alu_op_b_mux_sel_o = OP_B_REG_B; // TODO: should select vlmax not an immediate we can add a new immediate type
+        // alu_op_b_mux_sel_o  = OP_B_IMM;
+        // imm_b_mux_sel_o     = IMM_B_I;
+
+        alu_operator_o     = ALU_GEU;
+
+        // if (!instr_alu[14]) begin
+        //   // offset from immediate
+        //   imm_b_mux_sel_o     = IMM_B_S;
+        //   alu_op_b_mux_sel_o  = OP_B_IMM;
+        // end
+      end
+
+      ////////////////////
+      // Vector Store   //
+      ////////////////////
       OPCODE_VECTOR: begin
         alu_op_a_mux_sel_o = OP_A_REG_A;
-        alu_op_b_mux_sel_o = OP_B_REG_B; // TODO: check this. What if REG_B contains a garbage Value
+        alu_op_b_mux_sel_o = OP_B_REG_B; // TODO: check this. What if REG_B contains a garbage Value and not 0
         alu_operator_o     = ALU_ADD;
 
         // if (!instr_alu[14]) begin

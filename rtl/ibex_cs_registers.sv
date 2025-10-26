@@ -44,6 +44,9 @@ module ibex_cs_registers #(
   output ibex_pkg::priv_lvl_e  priv_mode_lsu_o,
   output logic                 csr_mstatus_tw_o,
 
+  //vl
+  output logic [31:0]          csr_vl_o,
+
   // mtvec
   output logic [31:0]          csr_mtvec_o,
   input  logic                 csr_mtvec_init_i,
@@ -240,6 +243,10 @@ module ibex_cs_registers #(
   logic [31:0] dscratch0_q;
   logic [31:0] dscratch1_q;
   logic        dscratch0_en, dscratch1_en;
+
+  // vl
+  logic [31:0] vl_q, vl_d;
+  logic vl_en;
 
   // CSRs for recoverable NMIs
   // NOTE: these CSRS are nonstandard, see https://github.com/riscv/riscv-isa-manual/issues/261
@@ -593,6 +600,9 @@ module ibex_cs_registers #(
     dscratch0_en = 1'b0;
     dscratch1_en = 1'b0;
 
+    vl_en = 1'b0; // vector extension
+    vl_d = csr_wdata_int;
+
     mstack_en      = 1'b0;
     mstack_d.mpie  = mstatus_q.mpie;
     mstack_d.mpp   = mstatus_q.mpp;
@@ -642,6 +652,8 @@ module ibex_cs_registers #(
 
         // mtvec
         CSR_MTVEC: mtvec_en = 1'b1;
+
+        CSR_VL: vl_en = = 1'b1;
 
         CSR_DCSR: begin
           dcsr_d = csr_wdata_int;
@@ -847,6 +859,7 @@ module ibex_cs_registers #(
   assign csr_depc_o  = depc_q;
   assign csr_mtvec_o = mtvec_q;
   assign csr_mtval_o = mtval_q;
+  assign csr_vl_o = vl_q;
 
   assign csr_mstatus_mie_o   = mstatus_q.mie;
   assign csr_mstatus_tw_o    = mstatus_q.tw;
@@ -1075,7 +1088,7 @@ module ibex_cs_registers #(
     .rd_error_o()
   );
 
-  // VL: vector lenght
+  // VL: vector length
   ibex_csr #(
     .Width     (32),
     .ShadowCopy(1'b0),

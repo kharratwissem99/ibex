@@ -589,7 +589,10 @@ package ibex_pkg;
     CSR_MHPMCOUNTER30H = 12'hB9E,
     CSR_MHPMCOUNTER31H = 12'hB9F,
     CSR_CPUCTRLSTS     = 12'h7C0,
-    CSR_SECURESEED     = 12'h7C1
+    CSR_SECURESEED     = 12'h7C1,
+
+    CSR_VL             = 12'hC20,
+    CSR_VTYPE          = 12'hC21
   } csr_num_e;
 
   // CSR pmp-related offsets

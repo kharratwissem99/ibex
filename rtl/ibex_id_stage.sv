@@ -192,7 +192,10 @@ module ibex_id_stage #(
                                                         // access to finish before proceeding
   output logic                      perf_mul_wait_o,
   output logic                      perf_div_wait_o,
-  output logic                      instr_id_done_o
+  output logic                      instr_id_done_o,
+
+  output logic                 is_vsetvli_o,
+  output logic                 v_rs1_en_o
 );
 
   import ibex_pkg::*;
@@ -397,8 +400,15 @@ module ibex_id_stage #(
         IMM_B_INCR_ADDR})
   end
 
+  logic [31:0] vlmax;
+  logic is_vsetvli;
+  assign is_vsetvli_o = is_vsetvli;
   // ALU MUX for Operand B
-  assign alu_operand_b = (alu_op_b_mux_sel == OP_B_IMM) ? imm_b : rf_rdata_b_fwd;
+  // assign alu_operand_b = (alu_op_b_mux_sel == OP_B_IMM) ? imm_b : rf_rdata_b_fwd;
+  always_comb begin
+    if (is_vsetvli) alu_operand_b = vlmax;
+    else alu_operand_b = (alu_op_b_mux_sel == OP_B_IMM) ? imm_b : rf_rdata_b_fwd;
+  end
 
   /////////////////////////////////////////
   // Multicycle Operation Stage Register //
@@ -465,6 +475,9 @@ module ibex_id_stage #(
     .illegal_c_insn_i   (illegal_c_insn_i),
 
     .lsu_mux_o(lsu_mux_o),
+    .is_vsetvli_o(is_vsetvli),
+    .v_rs1_en_o(v_rs1_en_o),
+    .vlmax_o(vlmax),
 
     // immediates
     .imm_a_mux_sel_o(imm_a_mux_sel),
