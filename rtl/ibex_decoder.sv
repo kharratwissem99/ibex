@@ -676,6 +676,7 @@ module ibex_decoder #(
         // Vector Store instructions (vse8.v, vse16.v, vse32.v)
         // Unit-stride vector stores have mop[2:0] = 000, so bits[28:26] = 000
         if ((instr[31] == 1'b0) && (instr[31:26] == 6'b0) && (instr[22:20] == 3'b0))begin // last bit is fixed and should be 0, see specification RVV 1.0 only sew is supported
+        // todo: should we throw an exception if sew=64 . The extension doesn't support it, but vsetvli can still handle it normally.
           if (instr[14:12] == 3'b111) begin // have also a fixed value and should be 111
             rf_ren_a_o         = 1'b1;  // Base address from rs1 //for rvfi and memecc todo: do we need these?
             // data_req_vs_o      = 1'b1;  // Request vector memory access

@@ -763,8 +763,8 @@ module ibex_core import ibex_pkg::*; #(
   always_comb begin
     if (is_vsetvli) begin
       if (v_rs1_en) begin
-        if (~result_ex) result_ex_custom = alu_operand_b_ex; // alu_operand_b_ex should be vlmax
-        else result_ex_custom = rf_rdata_a;
+        if (~result_ex[0]) result_ex_custom = rf_rdata_a; // alu_operand_b_ex should be vlmax
+        else result_ex_custom = alu_operand_b_ex;
       end
       else result_ex_custom = alu_operand_b_ex; // alu_operand_b_ex should be vlmax
     end

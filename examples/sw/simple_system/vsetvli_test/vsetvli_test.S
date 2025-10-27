@@ -73,8 +73,8 @@ main:
     # vsetvli s4, x0, e16,m1
     # vtypei for e16,m1: SEW=16 (001), LMUL=0 (000) → vtypei = 8 (0x008)
     # Binary: 0_00000001000_00000_111_10100_1010111 (rd=s4=x20)
-    # Hex: 0x00007A57
-    .word 0x00007A57        # vsetvli s4, x0, e16,m1
+    # Hex: 0x00807A57
+    .word 0x00807A57        # vsetvli s4, x0, e16,m1
     
     # Expected: s4 should contain VLMAX for e16,m1 configuration
 
@@ -87,8 +87,8 @@ main:
     # vsetvli s5, t3, e8,m1
     # vtypei for e8,m1: SEW=8 (000), LMUL=0 (000) → vtypei = 0 (0x000)
     # Binary: 0_00000000000_11100_111_10101_1010111 (rd=s5=x21)
-    # Hex: 0x0007FAD7
-    .word 0x0007FAD7        # vsetvli s5, t3, e8,m1
+    # Hex: 0x000E7AD7
+    .word 0x000E7AD7        # vsetvli s5, t3, e8,m1
     
     # Test 3.2: Another SEW=32 test with different vl
     li t4, 2
@@ -194,8 +194,12 @@ main:
     # Binary: 0_00000000000_00000_111_11100_1010111 (rd=t3=x28)
     # Hex: 0x00007E57
     .word 0x00007E57        # vsetvli t3, x0, e8,m1
-    
-    # Expected: t3 should match s11 (current vl for e8,m1)
+
+    # Read current vl without changing it (rs1=x0, rd!=x0)
+    # vsetvli t3, x0, e8,m1
+    # Binary: 0_00000000000_00000_111_00000_1010111 (rd=t3=x28)
+    # Hex: 0x00007057
+    .word 0x00007057        # vsetvli t3, x0, e8,m1
 
     # =============================================================================
     # TEST 7: Invalid/Reserved configurations (if applicable)
