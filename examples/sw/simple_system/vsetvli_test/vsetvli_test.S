@@ -14,7 +14,7 @@ main:
     # vtypei = immediate encoding vector type configuration
     
     # Initialize test registers
-    li x1, 0                # Clear x1 for test results
+    # Note: x1 is used as link register (ra) - do not clear it!
     li x2, 0                # Clear x2 for test results
     li x3, 0                # Clear x3 for test results
     li x4, 0                # Clear x4 for test results
@@ -24,35 +24,35 @@ main:
     # TEST 1: Basic VSETVLI with different vector lengths
     # =============================================================================
     
-    # Test 1.1: Request vl=4, SEW=8, LMUL=1
+    # Test 1.1: Request vl=4, SEW=8, LMUL=0 (m1)
     li t0, 4                # Request vector length of 4
-    # vsetvli x1, t0, e8,m1
+    # vsetvli s0, t0, e8,m1  (use s0 instead of x1 to preserve return address)
     # Encoding: vsetvli rd, rs1, vtypei
-    # vtypei for e8,m1: SEW=8 (000), LMUL=1 (000) → vtypei = 0
+    # vtypei for e8,m1: SEW=8 (000), LMUL=0 (000) → vtypei = 0
     # Instruction format: 0_vtypei[10:0]_rs1[4:0]_111_rd[4:0]_1010111
-    # Binary: 0_00000000000_00101_111_00001_1010111
-    # Hex: 0x0002F0D7
-    .word 0x0002F0D7        # vsetvli x1, t0, e8,m1
+    # Binary: 0_00000000000_00101_111_01000_1010111 (rd=s0=x8)
+    # Hex: 0x0002F457
+    .word 0x0002F457        # vsetvli s0, t0, e8,m1
     
-    # Expected: x1 should contain actual vl set (should be 4 if supported)
+    # Expected: s0 should contain actual vl set (should be 4 if supported)
     
     # Test 1.2: Request vl=8, SEW=16, LMUL=0 (m1)  
     li t1, 8                # Request vector length of 8
-    # vsetvli x2, t1, e16,m1
+    # vsetvli s1, t1, e16,m1
     # vtypei for e16,m1: SEW=16 (001), LMUL=0 (000) → vtypei = 8 (0x008)
-    # Binary: 0_00000001000_00110_111_00010_1010111
-    # Hex: 0x00837157
-    .word 0x00837157        # vsetvli x2, t1, e16,m1
+    # Binary: 0_00000001000_00110_111_01001_1010111 (rd=s1=x9)
+    # Hex: 0x008374D7
+    .word 0x008374D7        # vsetvli s1, t1, e16,m1
     
-    # Expected: x2 should contain actual vl set (should be 8 if supported)
+    # Expected: s1 should contain actual vl set (should be 8 if supported)
     
     # Test 1.3: Request vl=16, SEW=32, LMUL=0 (m1)
     li t2, 16               # Request vector length of 16
-    # vsetvli x3, t2, e32,m1
+    # vsetvli s2, t2, e32,m1
     # vtypei for e32,m1: SEW=32 (010), LMUL=0 (000) → vtypei = 16 (0x010)
-    # Binary: 0_00000010000_00111_111_00011_1010111
-    # Hex: 0x0103F1D7
-    .word 0x0103F1D7        # vsetvli x3, t2, e32,m1
+    # Binary: 0_00000010000_00111_111_10010_1010111 (rd=s2=x18)
+    # Hex: 0x0103F957
+    .word 0x0103F957        # vsetvli s2, t2, e32,m1
     
     # Expected: x3 should contain actual vl set (should be 16 if supported)
 
@@ -61,22 +61,22 @@ main:
     # =============================================================================
     
     # Test 2.1: Set to VLMAX with SEW=8, LMUL=0 (m1)
-    # vsetvli x4, x0, e8,m1
+    # vsetvli s3, x0, e8,m1
     # vtypei for e8,m1: SEW=8 (000), LMUL=0 (000) → vtypei = 0
-    # Binary: 0_00000000000_00000_111_00100_1010111
-    # Hex: 0x00007257
-    .word 0x00007257        # vsetvli x4, x0, e8,m1
+    # Binary: 0_00000000000_00000_111_10011_1010111 (rd=s3=x19)
+    # Hex: 0x000079D7
+    .word 0x000079D7        # vsetvli s3, x0, e8,m1
     
-    # Expected: x4 should contain VLMAX for e8,m1 configuration
+    # Expected: s3 should contain VLMAX for e8,m1 configuration
     
     # Test 2.2: Set to VLMAX with SEW=16, LMUL=0 (m1)
-    # vsetvli x5, x0, e16,m1
+    # vsetvli s4, x0, e16,m1
     # vtypei for e16,m1: SEW=16 (001), LMUL=0 (000) → vtypei = 8 (0x008)
-    # Binary: 0_00000001000_00000_111_00101_1010111
-    # Hex: 0x008072D7
-    .word 0x008072D7        # vsetvli x5, x0, e16,m1
+    # Binary: 0_00000001000_00000_111_10100_1010111 (rd=s4=x20)
+    # Hex: 0x00007A57
+    .word 0x00007A57        # vsetvli s4, x0, e16,m1
     
-    # Expected: x5 should contain VLMAX for e16,m1 configuration
+    # Expected: s4 should contain VLMAX for e16,m1 configuration
 
     # =============================================================================
     # TEST 3: Different SEW values (LMUL always 0)
@@ -84,19 +84,19 @@ main:
     
     # Test 3.1: Another SEW=8 test with different vl
     li t3, 1
-    # vsetvli x6, t3, e8,m1
+    # vsetvli s5, t3, e8,m1
     # vtypei for e8,m1: SEW=8 (000), LMUL=0 (000) → vtypei = 0 (0x000)
-    # Binary: 0_00000000000_01000_111_00110_1010111
-    # Hex: 0x00047357
-    .word 0x00047357        # vsetvli x6, t3, e8,m1
+    # Binary: 0_00000000000_11100_111_10101_1010111 (rd=s5=x21)
+    # Hex: 0x0007FAD7
+    .word 0x0007FAD7        # vsetvli s5, t3, e8,m1
     
     # Test 3.2: Another SEW=32 test with different vl
     li t4, 2
-    # vsetvli x7, t4, e32,m1
+    # vsetvli s6, t4, e32,m1
     # vtypei for e32,m1: SEW=32 (010), LMUL=0 (000) → vtypei = 16 (0x010)
-    # Binary: 0_00000010000_01001_111_00111_1010111
-    # Hex: 0x0104F3D7
-    .word 0x0104F3D7        # vsetvli x7, t4, e32,m1
+    # Binary: 0_00000010000_11101_111_10110_1010111 (rd=s6=x22)
+    # Hex: 0x010EFB57
+    .word 0x010EFB57        # vsetvli s6, t4, e32,m1
 
     # =============================================================================
     # TEST 4: Edge cases and special configurations
@@ -104,22 +104,22 @@ main:
     
     # Test 4.1: Request vl=0 (should result in vl=0)
     li t5, 0
-    # vsetvli x8, t5, e8,m1
-    # vtypei for e8,m1: SEW=8 (000), LMUL=1 (000) → vtypei = 0
-    # Binary: 0_00000000000_01010_111_01000_1010111
-    # Hex: 0x00057457
-    .word 0x00057457        # vsetvli x8, t5, e8,m1
+    # vsetvli s7, t5, e8,m1
+    # vtypei for e8,m1: SEW=8 (000), LMUL=0 (000) → vtypei = 0
+    # Binary: 0_00000000000_11110_111_10111_1010111 (rd=s7=x23)
+    # Hex: 0x0007FBD7
+    .word 0x0007FBD7        # vsetvli s7, t5, e8,m1
     
-    # Expected: x8 should be 0
+    # Expected: s7 should be 0
     
     # Test 4.2: Request very large vl (should be clamped to VLMAX)
     li t6, 1000             # Request impossibly large vl
-    # vsetvli x9, t6, e8,m1
-    # Binary: 0_00000000000_01011_111_01001_1010111
-    # Hex: 0x0005F4D7
-    .word 0x0005F4D7        # vsetvli x9, t6, e8,m1
+    # vsetvli s8, t6, e8,m1
+    # Binary: 0_00000000000_11111_111_11000_1010111 (rd=s8=x24)
+    # Hex: 0x000FFC57
+    .word 0x000FFC57        # vsetvli s8, t6, e8,m1
     
-    # Expected: x9 should be clamped to VLMAX for e8,m1
+    # Expected: s8 should be clamped to VLMAX for e8,m1
 
     # =============================================================================
     # TEST 5: Verify vsetvli results with vector operations
@@ -127,11 +127,11 @@ main:
     
     # Set vl=4 for testing
     li t0, 4
-    # vsetvli x10, t0, e32,m1
-    # vtypei for e32,m1: SEW=32 (010), LMUL=1 (000) → vtypei = 16 (0x010)
-    # Binary: 0_00000010000_00101_111_01010_1010111
-    # Hex: 0x0102F557
-    .word 0x0102F557        # vsetvli x10, t0, e32,m1
+    # vsetvli s9, t0, e32,m1
+    # vtypei for e32,m1: SEW=32 (010), LMUL=0 (000) → vtypei = 16 (0x010)
+    # Binary: 0_00000010000_00101_111_11001_1010111 (rd=s9=x25)
+    # Hex: 0x0102FCD7
+    .word 0x0102FCD7        # vsetvli s9, t0, e32,m1
     
     # Now test a vector operation with this configuration
     la a0, test_data
@@ -175,27 +175,27 @@ main:
     
     # Test that vsetvli updates the state correctly
     li t0, 2
-    # vsetvli x11, t0, e16,m1
+    # vsetvli s10, t0, e16,m1
     # vtypei for e16,m1: SEW=16 (001), LMUL=0 (000) → vtypei = 8 (0x008)
-    # Binary: 0_00000001000_00101_111_01011_1010111
-    # Hex: 0x0082F5D7
-    .word 0x0082F5D7        # vsetvli x11, t0, e16,m1
+    # Binary: 0_00000001000_00101_111_11010_1010111 (rd=s10=x26)
+    # Hex: 0x0082FD57
+    .word 0x0082FD57        # vsetvli s10, t0, e16,m1
     
     # Then change to different configuration
     li t1, 8
-    # vsetvli x12, t1, e8,m1
+    # vsetvli s11, t1, e8,m1
     # vtypei for e8,m1: SEW=8 (000), LMUL=0 (000) → vtypei = 0 (0x000)
-    # Binary: 0_00000000000_00110_111_01100_1010111
-    # Hex: 0x00037657
-    .word 0x00037657        # vsetvli x12, t1, e8,m1
+    # Binary: 0_00000000000_00110_111_11011_1010111 (rd=s11=x27)
+    # Hex: 0x00037DD7
+    .word 0x00037DD7        # vsetvli s11, t1, e8,m1
     
     # Read current vl without changing it (rs1=x0, rd!=x0)
-    # vsetvli x13, x0, e8,m1
-    # Binary: 0_00000000000_00000_111_01101_1010111
-    # Hex: 0x000076D7
-    .word 0x000076D7        # vsetvli x13, x0, e8,m1
+    # vsetvli t3, x0, e8,m1
+    # Binary: 0_00000000000_00000_111_11100_1010111 (rd=t3=x28)
+    # Hex: 0x00007E57
+    .word 0x00007E57        # vsetvli t3, x0, e8,m1
     
-    # Expected: x13 should match x12 (current vl for e8,m1)
+    # Expected: t3 should match s11 (current vl for e8,m1)
 
     # =============================================================================
     # TEST 7: Invalid/Reserved configurations (if applicable)
@@ -205,9 +205,9 @@ main:
     li t0, 4
     # Try vsetvli with invalid SEW=64 (011)
     # vtypei for e64,m1: SEW=64 (011), LMUL=0 (000) → vtypei = 24 (0x018)
-    # Binary: 0_00000011000_00101_111_01110_1010111
-    # Hex: 0x0182F757
-    .word 0x01827757        # vsetvli x14, t0, e64,m1 (invalid SEW)
+    # Binary: 0_00000011000_00101_111_11101_1010111 (rd=t4=x29)
+    # Hex: 0x0182FED7
+    .word 0x0182FED7        # vsetvli t4, t0, e64,m1 (invalid SEW)
     
     # Expected: Should set vl=0 or cause illegal instruction (implementation-specific)
 
@@ -216,7 +216,7 @@ main:
     # =============================================================================
     
     # Read all vsetvli results for verification
-    # x1 through x14 contain the vl values returned by vsetvli
+    # s0-s11, t3-t4 contain the vl values returned by vsetvli
     # We can examine these in the trace to verify correct operation
     
     # Also read vector operation verification data
@@ -230,7 +230,7 @@ main:
     lw t0, 24(a0)           # Vector loaded/stored element 2
     lw t1, 28(a0)           # Vector loaded/stored element 3
 
-    # Return successfully
+    # Return successfully (x1/ra contains the correct return address)
     li a0, 0
     ret
 
