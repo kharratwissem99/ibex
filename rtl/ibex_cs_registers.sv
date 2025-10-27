@@ -325,7 +325,7 @@ module ibex_cs_registers #(
 
   assign illegal_csr_dbg    = dbg_csr & ~debug_mode_i;
   assign illegal_csr_priv   = (csr_addr[9:8] > {priv_lvl_q});
-  assign illegal_csr_write  = (csr_addr[11:10] == 2'b11) && csr_wr;
+  assign illegal_csr_write  = (csr_addr[11:10] == 2'b11) && csr_wr && (csr_addr != CSR_VL);
   assign illegal_csr_insn_o = csr_access_i & (illegal_csr | illegal_csr_write | illegal_csr_priv |
                                               illegal_csr_dbg);
 
@@ -553,6 +553,11 @@ module ibex_cs_registers #(
       // Custom CSR for LFSR re-seeding (cannot be read)
       CSR_SECURESEED: begin
         csr_rdata_int = '0;
+      end
+
+      CSR_VL: begin
+        csr_rdata_int = vl_q;
+        illegal_csr   = 1'b0;
       end
 
       default: begin
