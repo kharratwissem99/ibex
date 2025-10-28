@@ -123,6 +123,7 @@ module vector_ex_unit import ibex_pkg::*; #(
   
   logic [VLEN-1:0] vrf_rdata1_q, vrf_rdata1_d;
   logic [VLEN-1:0] vrf_rdata2_q, vrf_rdata2_d;
+  logic [VLEN-1:0] result_q, result_d;
 
   // Main state machine
   always_comb begin
@@ -133,6 +134,9 @@ module vector_ex_unit import ibex_pkg::*; #(
     valid        = 1'b0;
     vrf_rdata1_d = vrf_rdata1_q;
     vrf_rdata2_d = vrf_rdata1_q;
+
+    result_d = result_q;
+    vrf_we_o = = 1'b0;
 
     case (ex_state_q)
       EX_IDLE: begin
