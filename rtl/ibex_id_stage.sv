@@ -542,7 +542,7 @@ module ibex_id_stage #(
   // No flush is triggered for a small number of specific CSRs. These are ones that have been
   // specifically identified to be a) likely to be modified in exception handlers and b) safe to
   // alter without a flush.
-  assign no_flush_csr_addr = csr_addr_o inside {CSR_MSCRATCH, CSR_MEPC};
+  assign no_flush_csr_addr = csr_addr_o inside {CSR_MSCRATCH, CSR_MEPC, CSR_VL}; // todo: do we need to flush the pipe when changing the vl
 
   assign csr_pipe_flush = (csr_op_en_o == 1)                                         &&
                           (csr_op_o inside {CSR_OP_WRITE, CSR_OP_SET, CSR_OP_CLEAR}) &&
