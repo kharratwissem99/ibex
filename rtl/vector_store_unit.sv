@@ -3,7 +3,7 @@ module vector_store_unit (
   input  logic         rst_ni,
 
   input  logic [31:0]  adder_result_ex_i,
-  input  logic [4:0]   vl_i,               // vector length 
+  input  logic [31:0]   vl_i,               // vector length 
   input  logic [2:0]   request_type_i,     // 000=8bit, 101=16bit, 010=32bit
 
   output logic         addr_incr_req_o,

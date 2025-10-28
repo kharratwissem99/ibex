@@ -1,7 +1,7 @@
 // Vector Load/Store Unit Wrapper
-// Provides unified interface for vector memory operations
-// Currently implements: Store operations
-// TODO: Add Load operations in Phase 2
+// TODO: handle the case where v_vl_i is 0. until now i only supposed it is always > 0. the instruction is then invalid or should do nothing
+// TODO: vsew_i should match the request Type. if this is not the case the instruction is invalid.
+// TODO: implement the vtype register. vsetvli should take 2 cycles.
 
 module vldstu #(
   parameter int unsigned VLEN = 128
@@ -13,7 +13,7 @@ module vldstu #(
   input  logic         v_req_i,           // Vector memory operation request (wird im Zukunft unterteilt and will drive st_req or ld_req) will be multiplexed by using v_we_i.
   input  logic         v_we_i,            // 1=store, 0=load (for future), for now it is set to 1, because we only have a store Unit.
   input  logic [31:0]  v_addr_i,          // Base address. This is the adder_result_ex_i signal just renamed. 
-  input  logic [4:0]   v_vl_i,            // Vector length vl_i
+  input  logic [31:0]   v_vl_i,            // Vector length vl_i
   input  logic [2:0]   v_sew_i,           // Element width (000=8bit, 101=16bit, 010=32bit) // This is request_type_i
   // output logic         v_ready_o,      // Ready to accept new request, todo: check we don't need this signal
   output logic         v_done_o,          // Operation completed // This is st_done or ld_done

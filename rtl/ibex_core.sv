@@ -239,6 +239,7 @@ module ibex_core import ibex_pkg::*; #(
   logic        vsu_store_err;
   logic        vsu_busy;
   logic        vector_store_req;  // Generated from decoder
+  logic [31:0] v_vl;
   
   // LSU memory interface signals (before mux)
   logic [31:0] lsu_data_addr;
@@ -959,7 +960,7 @@ module ibex_core import ibex_pkg::*; #(
     .v_req_i(vst_req),           // Vector memory request (both loads and stores)
     .v_we_i(lsu_we),             // 1=store, 0=load (from decoder) TODO: be aware this signal comes from id stage and goes also to the load store unit. this is not safe at all
     .v_addr_i(alu_adder_result_ex),
-    .v_vl_i(5'b00100),          // Hard-coded VL=4 for testing
+    .v_vl_i(v_vl),
     .v_sew_i(lsu_type[1:0] == 2'b10 ? 3'b000 :   // sb -> SEW=8
              lsu_type[1:0] == 2'b01 ? 3'b101 :   // sh -> SEW=16
              lsu_type[1:0] == 2'b00 ? 3'b010 :   // sw -> SEW=32
@@ -1261,8 +1262,6 @@ module ibex_core import ibex_pkg::*; #(
   end
   // assign csr_wdata  = alu_operand_a_ex;
 
-  logic [31:0] vl_unused;
-
   ibex_cs_registers #(
     .DbgTriggerEn     (DbgTriggerEn),
     .DbgHwBreakNum    (DbgHwBreakNum),
@@ -1318,7 +1317,7 @@ module ibex_core import ibex_pkg::*; #(
     .csr_mepc_o       (csr_mepc),
     .csr_mtval_o      (crash_dump_mtval),
 
-    .csr_vl_o(vl_unused),
+    .csr_vl_o(v_vl),
 
     // PMP
     .csr_pmp_cfg_o    (csr_pmp_cfg),
