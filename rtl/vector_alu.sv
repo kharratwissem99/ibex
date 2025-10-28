@@ -13,7 +13,7 @@ module vector_alu import ibex_pkg::*; (
     // input  logic       vm_i, // todo: not supported
     // input  strb_t      mask_i, // todo: not supported
     // input  logic       narrowing_select_i, // todo: not supported
-    input  ara_op_e    op_i,
+    input  v_alu_op_e    op_i,
     input  vew_e       vew_i,
     output logic [32-1:0]      result_o
   );
@@ -39,7 +39,7 @@ module vector_alu import ibex_pkg::*; (
 
   // Comparison instructions that use signed operands
   logic is_signed;
-  assign is_signed = op_i inside {VMAX, VREDMAX, VMIN, VREDMIN};
+  assign is_signed = op_i inside {VMAX, VMIN};
   // assign is_signed = op_i inside {VMAX, VREDMAX, VMIN, VREDMIN, VMSLT, VMSLE, VMSGT}; // todo: VMSLT, VMSLE, VMSGT are not supported
   // Compare operands.
   // For vew_i = EW8, all bits are valid.
@@ -87,26 +87,29 @@ module vector_alu import ibex_pkg::*; (
 
     if (valid_i)
       unique case (op_i)
-        // Logical operations
-        VAND, VREDAND: res = operand_a_i & operand_b_i;
-        VOR, VREDOR  : res = operand_a_i | operand_b_i;
-        VXOR, VREDXOR: res = operand_a_i ^ operand_b_i;
+        // Logical operations // todo: VREDAND, VREDOR, VREDXOR not supported
+        // VAND, VREDAND: res = operand_a_i & operand_b_i;
+        // VOR, VREDOR  : res = operand_a_i | operand_b_i;
+        // VXOR, VREDXOR: res = operand_a_i ^ operand_b_i;
+        VAND: res = operand_a_i & operand_b_i;
+        VOR: res = operand_a_i | operand_b_i;
+        VXOR: res = operand_a_i ^ operand_b_i;
 
-        // Mask logical operations
-        VMAND   : res = operand_a_i & operand_b_i;
-        VMANDNOT: res = ~operand_a_i & operand_b_i;
-        VMNAND  : res = ~(operand_a_i & operand_b_i);
-        VMOR    : res = operand_a_i | operand_b_i;
-        VMNOR   : res = ~(operand_a_i | operand_b_i);
-        VMORNOT : res = ~operand_a_i | operand_b_i;
-        VMXOR   : res = operand_a_i ^ operand_b_i;
-        VMXNOR  : res = ~(operand_a_i ^ operand_b_i);
+        // Mask logical operations // todo: not supported
+        // VMAND   : res = operand_a_i & operand_b_i;
+        // VMANDNOT: res = ~operand_a_i & operand_b_i;
+        // VMNAND  : res = ~(operand_a_i & operand_b_i);
+        // VMOR    : res = operand_a_i | operand_b_i;
+        // VMNOR   : res = ~(operand_a_i | operand_b_i);
+        // VMORNOT : res = ~operand_a_i | operand_b_i;
+        // VMXOR   : res = operand_a_i ^ operand_b_i;
+        // VMXNOR  : res = ~(operand_a_i ^ operand_b_i);
 
-        // Mask operands pass-through
-        VCPOP, VFIRST, VMSBF, VMSOF, VMSIF, VIOTA: res = operand_b_i;
+        // Mask operands pass-through // todo: not supported
+        // VCPOP, VFIRST, VMSBF, VMSOF, VMSIF, VIOTA: res = operand_b_i;
 
-        // Mask operands pass-through
-        VRGATHER, VRGATHEREI16, VCOMPRESS: res = operand_a_i;
+        // Mask operands pass-through // todo: not supported
+        // VRGATHER, VRGATHEREI16, VCOMPRESS: res = operand_a_i;
 
         // todo: VADC, VMADC are not supported
         // VADD, VADC, VMADC, VREDSUM, VWREDSUMU, VWREDSUM: unique case (vew_i) 
@@ -143,7 +146,21 @@ module vector_alu import ibex_pkg::*; (
         //         res.w32[b] = (op_i == VMSBC) ? {30'b0, 1'b1, sub[32]} : sub[31:0];
         //       end
         //   endcase
-        VADD, VREDSUM, VWREDSUMU, VWREDSUM: unique case (vew_i)
+        // VADD, VREDSUM, VWREDSUMU, VWREDSUM: unique case (vew_i) // todo: VREDSUM, VWREDSUMU, VWREDSUM not supported
+        //     EW8: for (int b = 0; b < 4; b++) begin
+        //         automatic logic [ 8:0] sum = opa.w8 [b] + opb.w8 [b];
+        //         res.w8[b] = sum[7:0];
+        //       end
+        //     EW16: for (int b = 0; b < 2; b++) begin
+        //         automatic logic [16:0] sum = opa.w16[b] + opb.w16[b];
+        //         res.w16[b] = sum[15:0];
+        //       end
+        //     EW32: for (int b = 0; b < 1; b++) begin
+        //         automatic logic [32:0] sum = opa.w32[b] + opb.w32[b];
+        //         res.w32[b] = sum[31:0];
+        //       end
+        //   endcase
+          VADD: unique case (vew_i)
             EW8: for (int b = 0; b < 4; b++) begin
                 automatic logic [ 8:0] sum = opa.w8 [b] + opb.w8 [b];
                 res.w8[b] = sum[7:0];
@@ -218,17 +235,25 @@ module vector_alu import ibex_pkg::*; (
         //   endcase
 
         // Scalar move
-        VMVSX, VFMVSF: res = opa; // todo: these are not vector-vector ops. VFMVSF is to a move a float. should we support it?
+        // VMVSX, VFMVSF: res = opa; // todo: these are not vector-vector ops. VFMVSF is to a move a float. should we support it?
 
-        // Comparison instructions
-        VMIN, VMINU, VMAX, VMAXU,
-        VREDMINU, VREDMIN, VREDMAXU, VREDMAX: unique case (vew_i)
+        // Comparison instructions todo: VREDMINU, VREDMIN, VREDMAXU, VREDMAX not supported
+        // VMIN, VMINU, VMAX, VMAXU,
+        // VREDMINU, VREDMIN, VREDMAXU, VREDMAX: unique case (vew_i)
+        //     EW8 : for (int b = 0; b < 4; b++) res.w8 [b] =
+        //         (less[1*b] ^ (op_i == VMAX || op_i == VMAXU || op_i == VREDMAXU || op_i == VREDMAX)) ? opb.w8 [b] : opa.w8 [b];
+        //     EW16: for (int b = 0; b < 2; b++) res.w16[b] =
+        //         (less[2*b] ^ (op_i == VMAX || op_i == VMAXU || op_i == VREDMAXU || op_i == VREDMAX)) ? opb.w16[b] : opa.w16[b];
+        //     EW32: for (int b = 0; b < 1; b++) res.w32[b] =
+        //         (less[4*b] ^ (op_i == VMAX || op_i == VMAXU || op_i == VREDMAXU || op_i == VREDMAX)) ? opb.w32[b] : opa.w32[b];
+        //   endcase
+        VMIN, VMINU, VMAX, VMAXU: unique case (vew_i)
             EW8 : for (int b = 0; b < 4; b++) res.w8 [b] =
-                (less[1*b] ^ (op_i == VMAX || op_i == VMAXU || op_i == VREDMAXU || op_i == VREDMAX)) ? opb.w8 [b] : opa.w8 [b];
+                (less[1*b] ^ (op_i == VMAX || op_i == VMAXU)) ? opb.w8 [b] : opa.w8 [b];
             EW16: for (int b = 0; b < 2; b++) res.w16[b] =
-                (less[2*b] ^ (op_i == VMAX || op_i == VMAXU || op_i == VREDMAXU || op_i == VREDMAX)) ? opb.w16[b] : opa.w16[b];
+                (less[2*b] ^ (op_i == VMAX || op_i == VMAXU)) ? opb.w16[b] : opa.w16[b];
             EW32: for (int b = 0; b < 1; b++) res.w32[b] =
-                (less[4*b] ^ (op_i == VMAX || op_i == VMAXU || op_i == VREDMAXU || op_i == VREDMAX)) ? opb.w32[b] : opa.w32[b];
+                (less[4*b] ^ (op_i == VMAX || op_i == VMAXU)) ? opb.w32[b] : opa.w32[b];
           endcase
         // VMSEQ, VMSNE: unique case (vew_i) // todo: not supported. mask_i signal needed to be supported
         //     EW8 : for (int b = 0; b < 4; b++) res.w8 [b][1:0] =

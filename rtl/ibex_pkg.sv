@@ -218,6 +218,12 @@ package ibex_pkg;
   } v_alu_op_e;
 
   typedef enum logic [1:0] {
+    EW8,
+    EW16,
+    EW32
+  } vew_e;
+
+  typedef enum logic [1:0] {
     // Multiplier/divider
     MD_OP_MULL,
     MD_OP_MULH,
