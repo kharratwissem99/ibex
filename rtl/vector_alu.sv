@@ -218,7 +218,7 @@ module vector_alu import ibex_pkg::*; (
         //   endcase
 
         // Scalar move
-        VMVSX, VFMVSF: res = opa;
+        VMVSX, VFMVSF: res = opa; // todo: these are not vector-vector ops. VFMVSF is to a move a float. should we support it?
 
         // Comparison instructions
         VMIN, VMINU, VMAX, VMAXU,

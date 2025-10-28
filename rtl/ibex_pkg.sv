@@ -187,6 +187,36 @@ package ibex_pkg;
     ALU_CRC32C_W
   } alu_op_e;
 
+  ////////////////////
+  // ALU operations //
+  ////////////////////
+
+  typedef enum logic [3:0] {
+    // Arithmetic and logic instructions
+    VADD, VSUB, VRSUB, VMINU, VMIN, VMAXU, VMAX, VAND, VOR, VXOR,
+    // Shifts,
+    VSLL, VSRL, VSRA,
+    // Scalar moves to VRF
+    // VMVSX, VFMVSF, // todo: these are not vector-vector ops. VFMVSF is to a move a float. should we support it? 
+    // Integer Reductions
+    // VREDSUM, VREDAND, VREDOR, VREDXOR, VREDMINU, VREDMIN, VREDMAXU, VREDMAX, VWREDSUMU, VWREDSUM, // todo: should we support these?
+    // Mul/Mul-Add
+    // VMUL, VMULH, VMULHU, VMULHSU, VMACC, VNMSAC, VMADD, VNMSUB, todo: should be supported??
+    // Div
+    // VDIVU, VDIV, VREMU, VREM, todo: should be supported??
+    // todo: implement when supporting the masking
+    // Mask to mask
+    // VMSBF, VMSOF, VMSIF,
+    // // Mask to non-mask
+    // VIOTA,
+    // // Mask to scalar
+    // VCPOP, VFIRST,
+    // // Mask operations
+    // VMANDNOT, VMAND, VMOR, VMXOR, VMORNOT, VMNAND, VMNOR, VMXNOR,
+    // // Complex permutations
+    // VRGATHER, VRGATHEREI16, VCOMPRESS
+  } v_alu_op_e;
+
   typedef enum logic [1:0] {
     // Multiplier/divider
     MD_OP_MULL,
