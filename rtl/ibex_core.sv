@@ -590,6 +590,7 @@ module ibex_core import ibex_pkg::*; #(
   //////////////
 
   logic vst_req;
+  logic vex_req;
   logic lsu_resp_valid_shared;
 
   ibex_id_stage #(
@@ -758,7 +759,8 @@ module ibex_core import ibex_pkg::*; #(
     .instr_id_done_o  (instr_id_done),
 
     .is_vsetvli_o(is_vsetvli),
-    .v_rs1_en_o(v_rs1_en)
+    .v_rs1_en_o(v_rs1_en),
+    .vex_req_o(vex_req)
   );
 
   always_comb begin

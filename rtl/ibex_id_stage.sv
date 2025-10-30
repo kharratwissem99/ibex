@@ -119,6 +119,8 @@ module ibex_id_stage #(
   output logic                      lsu_sign_ext_o,
   output logic [31:0]               lsu_wdata_o,
 
+  output logic                      vex_req_o, // to the vector EX
+
   input  logic                      lsu_req_done_i, // Data req to LSU is complete and
                                                     // instruction can move to writeback
                                                     // (only relevant where writeback stage is
@@ -230,6 +232,7 @@ module ibex_id_stage #(
   logic        stall_ld_hz;
   logic        stall_mem;
   logic        stall_multdiv;
+  logic        stall_v_ex;
   logic        stall_branch;
   logic        stall_jump;
   logic        stall_id;
@@ -447,6 +450,7 @@ module ibex_id_stage #(
   /////////////
 
   logic vst_req_dec;
+  logic ex_req_vs_dec;
 
   ibex_decoder #(
     .RV32E          (RV32E),
@@ -527,6 +531,8 @@ module ibex_id_stage #(
     .data_we_o            (lsu_we),
     .data_type_o          (lsu_type),
     .data_sign_extension_o(lsu_sign_ext),
+    
+    .ex_req_vs_o        (ex_req_vs_dec),
 
     // jump/branches
     .jump_in_dec_o  (jump_in_dec),
@@ -661,14 +667,17 @@ module ibex_id_stage #(
   assign multdiv_en_dec   = mult_en_dec | div_en_dec;
 
   logic vst_req;
+  logic vex_req;
 
   assign lsu_req         = instr_executing ? data_req_allowed & lsu_req_dec  : 1'b0;
   assign vst_req         = instr_executing ? data_req_allowed & vst_req_dec  : 1'b0;
+  assign vex_req         = instr_executing ? data_req_allowed & ex_req_vs_dec  : 1'b0; // todo: Maybe we can reduce this multiplexer, see if data_req_allowed can be removed. i think we can keep it because it is directly connected with first cycle signal(when the writeback stage is not enabled)
   assign mult_en_id      = instr_executing ? mult_en_dec                     : 1'b0;
   assign div_en_id       = instr_executing ? div_en_dec                      : 1'b0;
 
   assign lsu_req_o               = lsu_req;
   assign vst_req_o               = vst_req;
+  assign vex_req_o               = vex_req;
   assign lsu_we_o                = lsu_we;
   assign lsu_type_o              = lsu_type;
   assign lsu_sign_ext_o          = lsu_sign_ext;
@@ -815,6 +824,8 @@ module ibex_id_stage #(
     jump_set_raw            = 1'b0;
     perf_branch_o           = 1'b0;
 
+    stall_v_ex              = 1'b0;
+
     if (instr_executing_spec) begin
       unique case (id_fsm_q)
         FIRST_CYCLE: begin
@@ -824,9 +835,15 @@ module ibex_id_stage #(
                 // LSU operation
                 id_fsm_d    = MULTI_CYCLE;
               end else begin
-                if(~lsu_req_done_i) begin
+                if(~lsu_req_done_i) begin // todo: this may be the reason why the writeback stage doesn't work
                   id_fsm_d  = MULTI_CYCLE;
                 end
+              end
+            end
+            ex_req_vs_dec: begin // todo: for now the writeback stage is not supported 
+              if (~v_ex_req_done_i) begin // this can be the done or the valid signal of vector execute Unit
+                id_fsm_d    = MULTI_CYCLE;
+                stall_v_ex  = = 1'b1;
               end
             end
             multdiv_en_dec: begin
@@ -884,6 +901,7 @@ module ibex_id_stage #(
             stall_multdiv   = multdiv_en_dec;
             stall_branch    = branch_in_dec;
             stall_jump      = jump_in_dec;
+            stall_v_ex      = ex_req_vs_dec;
           end
         end
 
@@ -903,13 +921,13 @@ module ibex_id_stage #(
   // Stall ID/EX stage for reason that relates to instruction in ID/EX, update assertion below if
   // modifying this.
   assign stall_id = stall_ld_hz | stall_mem | stall_multdiv | stall_jump | stall_branch |
-                      stall_alu;
+                      stall_alu | stall_v_ex;
 
   // Generally illegal instructions have no reason to stall, however they must still stall waiting
   // for outstanding memory requests so exceptions related to them take priority over the illegal
   // instruction exception.
   `ASSERT(IllegalInsnStallMustBeMemStall, illegal_insn_o & stall_id |-> stall_mem &
-    ~(stall_ld_hz | stall_multdiv | stall_jump | stall_branch | stall_alu))
+    ~(stall_ld_hz | stall_multdiv | stall_jump | stall_branch | stall_alu | ex_req_vs_dec))
 
   assign instr_done = ~stall_id & ~flush_id & instr_executing;
 
@@ -1038,7 +1056,7 @@ module ibex_id_stage #(
     assign expecting_store_resp_o = 1'b0;
   end else begin : gen_no_stall_mem
 
-    assign multicycle_done = (lsu_req_dec | vst_req_dec)? lsu_resp_valid_i : ex_valid_i;
+    assign multicycle_done = (lsu_req_dec | vst_req_dec)? lsu_resp_valid_i : (ex_req_vs_dec ? v_ex_req_done_i : ex_valid_i);
 
     assign data_req_allowed = instr_first_cycle;
 
@@ -1111,6 +1129,7 @@ module ibex_id_stage #(
 
   assign perf_mul_wait_o = stall_multdiv & mult_en_dec;
   assign perf_div_wait_o = stall_multdiv & div_en_dec;
+  // todo: Do the same for stall ex_req_vs_dec if you want to consider the performace counter 
 
   //////////
   // FCOV //

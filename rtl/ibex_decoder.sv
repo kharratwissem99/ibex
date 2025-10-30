@@ -99,6 +99,9 @@ module ibex_decoder #(
   output logic                 data_sign_extension_o, // sign extension for data read from
                                                       // memory
 
+  // Vector Execute Unit
+  output logic                 ex_req_vs_o,
+
   // jump/branches
   output logic                 jump_in_dec_o,         // jump is being calculated in ALU
   output logic                 branch_in_dec_o
@@ -252,6 +255,7 @@ module ibex_decoder #(
     data_sign_extension_o = 1'b0;
     data_req_o            = 1'b0; // for scalar LSU
     data_req_vs_o         = 1'b0; // trigger vector LSU
+    ex_req_vs_o           = 1'b0;
 
     illegal_insn          = 1'b0;
     ebrk_insn_o           = 1'b0;
@@ -672,7 +676,7 @@ module ibex_decoder #(
       ////////////////////
       // Vector Store   //
       ////////////////////
-      OPCODE_VSETVLI: begin
+      OPCODE_VSETVLI: begin //todo: change the opcode name in the enum 
         // Vector Store instructions (vse8.v, vse16.v, vse32.v)
         // Unit-stride vector stores have mop[2:0] = 000, so bits[28:26] = 000
         if ((instr[31] == 1'b0) && (instr[31:26] == 6'b0) && (instr[22:20] == 3'b0))begin // last bit is fixed and should be 0, see specification RVV 1.0 only sew is supported
@@ -692,6 +696,9 @@ module ibex_decoder #(
             // csr signals
             csr_access_o = v_rd_en | v_rs1_en;         // access to CSR
             csr_op = CSR_OP_WRITE;              // operation to perform on CSR
+          else if (instr[14:12] == 3'b000) begin // OPIVV Vector-vector
+            ex_req_vs_o      = 1'b1;  // Request the Vector Execute Unit
+          end
           end else begin
             illegal_insn = 1'b1; // Unsupported vector store width
           end
@@ -784,10 +791,11 @@ module ibex_decoder #(
     // NOTE: instructions can also be detected to be illegal inside the CSRs (upon accesses with
     // insufficient privileges), or when accessing non-available registers in RV32E,
     // these cases are not handled here
-    if (illegal_insn) begin
+    if (illegal_insn) begin // todo: check if other signals need to be assigned in this Block
       rf_we           = 1'b0;
       data_req_o      = 1'b0;
       data_req_vs_o   = 1'b0;
+      ex_req_vs_o     = 1'b0;
       data_we_o       = 1'b0;
       jump_in_dec_o   = 1'b0;
       jump_set_o      = 1'b0;
