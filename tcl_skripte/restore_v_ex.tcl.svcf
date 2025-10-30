@@ -1,0 +1,244 @@
+# SimVision Command Script (Thu Oct 30 04:10:01 PM CET 2025)
+#
+# Version 24.03.s004
+#
+# You can restore this configuration with:
+#
+#      xrun -q -f edalize_main.f -defparam RV32E=0 -defparam ICache=0 -defparam ICacheScramble=0 -defparam ICacheECC=0 -defparam BranchTargetALU=0 -defparam WritebackStage=0 -defparam SecureIbex=0 -defparam BranchPredictor=0 -defparam DbgTriggerEn=0 -defparam PMPEnable=0 -defparam PMPGranularity=0 -defparam PMPNumRegions=4 -defparam MHPMCounterNum=0 -defparam MHPMCounterWidth=40 -defparam SRAMInitFile=/home/kharrat/Desktop/repos/ibex/dummy.vmem -top ibex_simple_system -access rwc -input /home/kharrat/Desktop/repos/ibex/tcl_skripte/restore_vldstu.tcl -input restore_v_ex.tcl
+#
+
+
+#
+# Preferences
+#
+preferences set plugin-enable-svdatabrowser-new 1
+preferences set plugin-enable-groupscope 0
+preferences set plugin-enable-interleaveandcompare 0
+preferences set plugin-enable-waveformfrequencyplot 0
+
+#
+# Simulator
+#
+database require simulator -hints {
+	simulator "xrun -q -f edalize_main.f -defparam RV32E=0 -defparam ICache=0 -defparam ICacheScramble=0 -defparam ICacheECC=0 -defparam BranchTargetALU=0 -defparam WritebackStage=0 -defparam SecureIbex=0 -defparam BranchPredictor=0 -defparam DbgTriggerEn=0 -defparam PMPEnable=0 -defparam PMPGranularity=0 -defparam PMPNumRegions=4 -defparam MHPMCounterNum=0 -defparam MHPMCounterWidth=40 -defparam SRAMInitFile=/home/kharrat/Desktop/repos/ibex/dummy.vmem -top ibex_simple_system -gui -access rwc -input /home/kharrat/Desktop/repos/ibex/tcl_skripte/restore_vldstu.tcl -input restore_v_ex.tcl"
+}
+
+#
+# Mnemonic Maps
+#
+mmap new  -reuse -name {Boolean as Logic} -radix %b -contents {{%c=FALSE -edgepriority 1 -shape low}
+{%c=TRUE -edgepriority 1 -shape high}}
+mmap new  -reuse -name {Example Map} -radix %x -contents {{%b=11???? -bgcolor orange -label REG:%x -linecolor yellow -shape bus}
+{%x=1F -bgcolor red -label ERROR -linecolor white -shape EVENT}
+{%x=2C -bgcolor red -label ERROR -linecolor white -shape EVENT}
+{%x=* -label %x -linecolor gray -shape bus}}
+
+#
+# Design Browser windows
+#
+if {[catch {window new WatchList -name "Design Browser 1" -geometry 1920x1032+0+25}] != ""} {
+    window geometry "Design Browser 1" 1920x1032+0+25
+}
+window target "Design Browser 1" on
+browser using {Design Browser 1}
+browser set -scope [subst  {simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i}]} ]
+browser set \
+    -showassertions 0 \
+    -showfibers 0 \
+    -signalsort name
+browser yview see [subst  {simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i}]} ]
+browser timecontrol set -lock 0
+
+#
+# Waveform windows
+#
+if {[catch {window new WaveWindow -name "Waveform 1" -geometry 1920x1057+1920+0}] != ""} {
+    window geometry "Waveform 1" 1920x1057+1920+0
+}
+window target "Waveform 1" on
+waveform using {Waveform 1}
+waveform sidebar visibility partial
+waveform set \
+    -primarycursor TimeA \
+    -signalnames name \
+    -signalwidth 368 \
+    -units ns \
+    -valuewidth 75
+waveform baseline set -time 0
+
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.SHIFT_FAKTOR[1:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.VLEN}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.alu_result[31:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.anzahl_req[2:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.busy_o}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.clk_i}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.ex_req_i}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.ex_state_d}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.ex_state_e}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.ex_state_q}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.last_req}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.op_i[3:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.operand_a[31:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.operand_b[31:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.requests_counter_d[2:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.requests_counter_q[2:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.resp_valid_o}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.result_d[127:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.result_q[127:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.rst_ni}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.total_bytes[6:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.v_done_o}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.v_err_o}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.v_vl_i[31:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.valid}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.vew_i[1:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.vrf_rdata1_d[127:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.vrf_rdata1_i[127:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.vrf_rdata1_q[127:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.vrf_rdata2_d[127:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.vrf_rdata2_i[127:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.vrf_rdata2_q[127:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.vrf_wdata_o[127:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.u_ibex_core.vector_ex_unit_i.vrf_we_o}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.clk_i}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.dummy_instr_id_i}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.dummy_instr_wb_i}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.err_o}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.oh_raddr_a_err}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.oh_raddr_b_err}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.oh_we_err}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.raddr_a_i[4:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.raddr_b_i[4:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.rdata_a_o[31:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.rdata_b_o[31:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.rf_reg[0:31]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.rst_ni}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.test_en_i}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.unused_test_en}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.waddr_a_i[4:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.wdata_a_i[31:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.we_a_dec[31:0]}]}
+	} ]]
+set id [waveform add -signals [subst  {
+	{simulator::[format {ibex_simple_system.u_top.u_ibex_top.gen_regfile_ff.register_file_i.we_a_i}]}
+	} ]]
+
+waveform xview limits 0 10ns
+
+#
+# Waveform Window Links
+#
+
+#
+# Console windows
+#
+console set -windowname Console
+window geometry Console 1012x250+261+564
+
+#
+# Layout selection
+#
+
