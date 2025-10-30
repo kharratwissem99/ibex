@@ -695,10 +695,10 @@ module ibex_decoder #(
 
             // csr signals
             csr_access_o = v_rd_en | v_rs1_en;         // access to CSR
-            csr_op = CSR_OP_WRITE;              // operation to perform on CSR
+            csr_op = CSR_OP_WRITE;
+          end              // operation to perform on CSR
           else if (instr[14:12] == 3'b000) begin // OPIVV Vector-vector
             ex_req_vs_o      = 1'b1;  // Request the Vector Execute Unit
-          end
           end else begin
             illegal_insn = 1'b1; // Unsupported vector store width
           end

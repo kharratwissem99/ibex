@@ -843,7 +843,7 @@ module ibex_id_stage #(
             ex_req_vs_dec: begin // todo: for now the writeback stage is not supported 
               if (~v_ex_req_done_i) begin // this can be the done or the valid signal of vector execute Unit
                 id_fsm_d    = MULTI_CYCLE;
-                stall_v_ex  = = 1'b1;
+                stall_v_ex  = 1'b1;
               end
             end
             multdiv_en_dec: begin

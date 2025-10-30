@@ -195,7 +195,7 @@ package ibex_pkg;
     // Arithmetic and logic instructions
     VADD, VSUB, VRSUB, VMINU, VMIN, VMAXU, VMAX, VAND, VOR, VXOR,
     // Shifts,
-    VSLL, VSRL, VSRA,
+    VSLL, VSRL, VSRA
     // Scalar moves to VRF
     // VMVSX, VFMVSF, // todo: these are not vector-vector ops. VFMVSF is to a move a float. should we support it? 
     // Integer Reductions
