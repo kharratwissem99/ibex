@@ -39,6 +39,8 @@ filesets:
       - rtl/vector_load_unit.sv
       - rtl/vector_store_unit.sv
       - rtl/vldstu.sv
+      - rtl/vector_alu.sv
+      -  rtl/vector_ex_unit.sv
       - rtl/ibex_core.sv
     file_type: systemVerilogSource
 

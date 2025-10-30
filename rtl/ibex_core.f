@@ -21,5 +21,7 @@ ibex_register_file_ff.sv
 ibex_vrf.sv
 vector_store_unit.sv
 vector_load_unit.sv
+vector_alu.sv
+vector_ex_unit.sv
 vldstu.sv
 ibex_core.sv
