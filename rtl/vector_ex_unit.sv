@@ -71,7 +71,7 @@ module vector_ex_unit import ibex_pkg::*; #(
     endcase
   end
   
-  assign total_bytes = (vl_i << SHIFT_FAKTOR);
+  assign total_bytes = (v_vl_i << SHIFT_FAKTOR);
   assign anzahl_req = total_bytes[6:2] + |total_bytes[1:0]; // Ceiling division by 4
 
   //=============================================================================
@@ -93,10 +93,12 @@ module vector_ex_unit import ibex_pkg::*; #(
         vrf_rdata1_q <= '0;
         vrf_rdata2_q <= '0;
         requests_counter_q <= '0;
+        result_q <= result_d;
     end else begin
         vrf_rdata1_q <= vrf_rdata1_d;
         vrf_rdata2_q <= vrf_rdata2_d;
         requests_counter_q <= requests_counter_d;
+        result_q <= result_d;
     end
   end
 
@@ -104,10 +106,12 @@ module vector_ex_unit import ibex_pkg::*; #(
   always_comb begin
     requests_counter_d = requests_counter_q;
     last_req = 1'b0;
+    resp_valid_o = 1'b0;
     
     if ((ex_state_q != EX_IDLE) || ex_req_i) begin
       if (requests_counter_q + 1 == anzahl_req) begin
         last_req = 1'b1;
+        resp_valid_o = 1'b1;
         requests_counter_d = 2'd0; // Reset for next operation
       end else begin
         requests_counter_d = requests_counter_q + 1;
@@ -115,10 +119,16 @@ module vector_ex_unit import ibex_pkg::*; #(
     end
     
     // todo: Es ist vielleicht nutzlos. Nur wenn wir einen Abbruch(external Signal) machen, können wir das brauchen.
-    //if (st_req && (ex_state_q == ST_IDLE)) begin
+    //if (st_req && (ex_state_q == EX_IDLE)) begin
     //  requests_counter_d = 2'd0; // Reset at start
     //end
   end
+
+  // todo: complete
+  assign v_done_o; // todo: should we use this signal, maybe it is only relevant for pipelining? In the ex Unit is the same as resp_valid 
+  assign v_err_o = 1'b0; // todo: should we implement an error?
+
+  assign busy_o = (ex_state_q != EX_IDLE);
 
   
   logic [VLEN-1:0] vrf_rdata1_q, vrf_rdata1_d;
@@ -133,10 +143,11 @@ module vector_ex_unit import ibex_pkg::*; #(
     operand_b    = '0;
     valid        = 1'b0;
     vrf_rdata1_d = vrf_rdata1_q;
-    vrf_rdata2_d = vrf_rdata1_q;
+    vrf_rdata2_d = vrf_rdata2_q;
 
     result_d = result_q;
-    vrf_we_o = = 1'b0;
+    vrf_we_o = 1'b0;
+    vrf_wdata_o = '0;
 
     case (ex_state_q)
       EX_IDLE: begin
@@ -147,9 +158,13 @@ module vector_ex_unit import ibex_pkg::*; #(
             vrf_rdata1_d = vrf_rdata1_i >> 32;
             vrf_rdata2_d = vrf_rdata2_i >> 32;
             if (last_req) begin
-              ex_state_d = ST_IDLE;
+              ex_state_d = EX_IDLE;
+              // write the result in the vector register file
+              vrf_we_o = 1'b1;
+              vrf_wdata_o = {96'b0,alu_result};
             end else begin
-              ex_state_d = ST_REQ;
+              ex_state_d = EX_REQ;
+              result_d = {alu_result, result_q[127:32]};
             end
         end
       end
@@ -158,13 +173,16 @@ module vector_ex_unit import ibex_pkg::*; #(
         operand_b    = vrf_rdata2_q[31:0];
         valid        = 1'b1;
         vrf_rdata1_d = vrf_rdata1_q >> 32;
-        vrf_rdata2_d = vrf_rdata1_q >> 32;
+        vrf_rdata2_d = vrf_rdata2_q >> 32;
         valid        = 1'b1;
+        result_d = {alu_result, result_q[127:32]};
         if (last_req) begin
-            ex_state_d = ST_IDLE;
+            ex_state_d = EX_IDLE;
             // todo: write the result in the vector register file
-            vrf_we_o = = 1'b1;
+            vrf_we_o = 1'b1;
+            vrf_wdata_o = {alu_result, result_q[127:32]} >> (32 * (4 - anzahl_req));
         end
+        else result_d = {alu_result, result_q[127:32]};
       end
     endcase
   end
