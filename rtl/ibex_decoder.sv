@@ -709,7 +709,7 @@ module ibex_decoder #(
             is_vsetvli = 1'b1;
 
             if (sew == 3'b000) vew_d = EW8;
-            else if (sew == 3'b101) vew_d = EW16;
+            else if (sew == 3'b001) vew_d = EW16;
             else vew_d = EW32;
 
             // csr signals
