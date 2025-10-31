@@ -97,7 +97,7 @@ module vector_ex_unit import ibex_pkg::*; #(
         vrf_rdata1_q <= '0;
         vrf_rdata2_q <= '0;
         requests_counter_q <= '0;
-        result_q <= result_d;
+        result_q <= '0;
         ex_state_q <= EX_IDLE;
     end else begin
         vrf_rdata1_q <= vrf_rdata1_d;
