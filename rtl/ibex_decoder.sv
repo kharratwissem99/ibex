@@ -982,7 +982,7 @@ module ibex_decoder #(
           6'b100101: vex_alu_op_o = VSLL;
           6'b101000: vex_alu_op_o = VSRL;
           6'b101001: vex_alu_op_o = VSRA;
-          default: vex_alu_op_o = '0;
+          default: vex_alu_op_o = VADD;
         endcase
 
         // if (!instr_alu[14]) begin
