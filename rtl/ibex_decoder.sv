@@ -960,14 +960,14 @@ module ibex_decoder #(
       // Vector Store   //
       ////////////////////
       OPCODE_VSETVLI: begin // change the name of the opcode
-        alu_op_a_mux_sel_o = OP_A_REG_A; // this schould contain the AVL
+        alu_op_a_mux_sel_o = OP_A_REG_A; // this should contain the AVL
         // alu_op_b_mux_sel_o = OP_B_REG_B; // TODO: should select vlmax not an immediate we can add a new immediate type
         // alu_op_b_mux_sel_o  = OP_B_IMM;
         // imm_b_mux_sel_o     = IMM_B_I;
 
         alu_operator_o     = ALU_GEU;
 
-        case (instr_alu[31:26]) // funct6
+        unique case (instr[31:26]) // funct6
           6'b000000: vex_alu_op_o = VADD;
           6'b000010: vex_alu_op_o = VSUB;
           6'b000011: vex_alu_op_o = VRSUB;
@@ -981,7 +981,7 @@ module ibex_decoder #(
           6'b100101: vex_alu_op_o = VSLL;
           6'b101000: vex_alu_op_o = VSRL;
           6'b101001: vex_alu_op_o = VSRA;
-          default: vex_alu_op_o = VADD;
+          default: ;
         endcase
 
         // if (!instr_alu[14]) begin
