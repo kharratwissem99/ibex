@@ -120,6 +120,7 @@ module ibex_id_stage #(
   output logic [31:0]               lsu_wdata_o,
 
   output logic                      vex_req_o, // to the vector EX
+  input  logic                      vex_resp_valid_i,
 
   input  logic                      lsu_req_done_i, // Data req to LSU is complete and
                                                     // instruction can move to writeback
@@ -841,7 +842,7 @@ module ibex_id_stage #(
               end
             end
             ex_req_vs_dec: begin // todo: for now the writeback stage is not supported 
-              if (~v_ex_req_done_i) begin // this can be the done or the valid signal of vector execute Unit
+              if (~vex_resp_valid_i) begin // this can be the done or the valid signal of vector execute Unit
                 id_fsm_d    = MULTI_CYCLE;
                 stall_v_ex  = 1'b1;
               end
@@ -1056,7 +1057,7 @@ module ibex_id_stage #(
     assign expecting_store_resp_o = 1'b0;
   end else begin : gen_no_stall_mem
 
-    assign multicycle_done = (lsu_req_dec | vst_req_dec)? lsu_resp_valid_i : (ex_req_vs_dec ? v_ex_req_done_i : ex_valid_i);
+    assign multicycle_done = (lsu_req_dec | vst_req_dec)? lsu_resp_valid_i : (ex_req_vs_dec ? vex_resp_valid_i : ex_valid_i);
 
     assign data_req_allowed = instr_first_cycle;
 

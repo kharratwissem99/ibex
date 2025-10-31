@@ -38,6 +38,10 @@ module vector_ex_unit import ibex_pkg::*; #(
 
   ex_state_e ex_state_q, ex_state_d;
 
+  logic [VLEN-1:0] vrf_rdata1_q, vrf_rdata1_d;
+  logic [VLEN-1:0] vrf_rdata2_q, vrf_rdata2_d;
+  logic [VLEN-1:0] result_q, result_d;
+
   // Internal signals
   logic [31:0] alu_result;
   logic [31:0] operand_a;
@@ -125,15 +129,10 @@ module vector_ex_unit import ibex_pkg::*; #(
   end
 
   // todo: complete
-  assign v_done_o; // todo: should we use this signal, maybe it is only relevant for pipelining? In the ex Unit is the same as resp_valid 
+  assign v_done_o = 1'b0; // todo: should we use this signal, maybe it is only relevant for pipelining? In the ex Unit is the same as resp_valid 
   assign v_err_o = 1'b0; // todo: should we implement an error?
 
   assign busy_o = (ex_state_q != EX_IDLE);
-
-  
-  logic [VLEN-1:0] vrf_rdata1_q, vrf_rdata1_d;
-  logic [VLEN-1:0] vrf_rdata2_q, vrf_rdata2_d;
-  logic [VLEN-1:0] result_q, result_d;
 
   // Main state machine
   always_comb begin
