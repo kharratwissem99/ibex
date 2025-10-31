@@ -102,6 +102,7 @@ module ibex_decoder #(
   // Vector Execute Unit
   output logic                 ex_req_vs_o,
   output ibex_pkg::v_alu_op_e  vex_alu_op_o,
+  output ibex_pkg::vew_e       vew_o,
 
   // jump/branches
   output logic                 jump_in_dec_o,         // jump is being calculated in ALU
@@ -162,6 +163,18 @@ module ibex_decoder #(
   assign imm_b_type_o = { {19{instr[31]}}, instr[31], instr[7], instr[30:25], instr[11:8], 1'b0 };
   assign imm_u_type_o = { instr[31:12], 12'b0 };
   assign imm_j_type_o = { {12{instr[31]}}, instr[19:12], instr[20], instr[30:21], 1'b0 };
+
+  // todo: temporary workaround until the vtype csr register is implemented
+  vew_e vew_q, vew_d;
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+        vew_q <= EW8;
+    end else begin
+        vew_q <= vew_d;
+    end
+  end 
+
+  assign vew_o = vew_q;
 
   always_comb begin
     if (is_vsetvli) csr_addr_o = CSR_VL;
@@ -267,6 +280,7 @@ module ibex_decoder #(
 
     is_vsetvli = 1'b0;
     lsu_mux_o = 1'b0;
+    vew_d = vew_q;
 
     opcode                = opcode_e'(instr[6:0]);
 
@@ -693,6 +707,10 @@ module ibex_decoder #(
             // else rf_wdata_sel_o        = RF_WD_VLMAX;
             rf_wdata_sel_o        = RF_WD_EX;
             is_vsetvli = 1'b1;
+
+            if (sew == 3'b000) vew_d = EW8;
+            else if (sew == 3'b101) vew_d = EW16;
+            else vew_d = EW32;
 
             // csr signals
             csr_access_o = v_rd_en | v_rs1_en;         // access to CSR

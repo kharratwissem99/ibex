@@ -658,6 +658,7 @@ module ibex_core import ibex_pkg::*; #(
     // Stalls
     .ex_valid_i      (ex_valid),
     .vex_alu_op_o    (vex_alu_op),
+    .vew_o           (vex_element_width),
     .lsu_resp_valid_i(lsu_resp_valid_shared),
     .lsu_mux_o(lsu_mux),
 
@@ -868,7 +869,7 @@ module ibex_core import ibex_pkg::*; #(
   
   // TODO: Add proper decoding for vector ALU operations and element width
   // assign vex_alu_op = VADD;  // Placeholder - needs proper decoder integration
-  assign vex_element_width = EW32; // Placeholder - needs proper decoder integration
+  // assign vex_element_width = EW32; // Placeholder - needs proper decoder integration
 
   // Vector load instructions write to vd field (rd = instr[11:7])
   assign vrf_waddr = instr_rdata_id[11:7]; // vd field for vector loads and vector execute
