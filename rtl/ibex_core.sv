@@ -267,7 +267,21 @@ module ibex_core import ibex_pkg::*; #(
   // Vector Load/Store Unit write signals for VRF
   logic         vldstu_vrf_we;
   logic [127:0] vldstu_vrf_wdata;
-  logic [4:0]   vldstu_vrf_waddr;
+  logic [4:0]   vrf_waddr;
+  logic [4:0]   vrf_waddr_vs2;
+
+  // Vector Execute Unit signals
+  logic         vex_done;
+  logic         vex_err;
+  logic         vex_busy;
+  logic         vex_resp_valid;
+  v_alu_op_e    vex_alu_op;
+  vew_e         vex_element_width;
+  
+  // Vector Execute Unit write signals for VRF
+  logic         vex_vrf_we;
+  logic [127:0] vex_vrf_wdata;
+  // logic [4:0]   vex_vrf_waddr;
 
   // Jump and branch target and decision (EX->IF)
   logic [31:0] branch_target_ex;
@@ -458,7 +472,7 @@ module ibex_core import ibex_pkg::*; #(
     end
   end else begin : g_core_busy_non_secure
     // For non secure Ibex, synthesis is allowed to optimize core_busy_o.
-    assign core_busy_o = (ctrl_busy || if_busy || (lsu_busy | vsu_busy)) ? IbexMuBiOn : IbexMuBiOff;
+    assign core_busy_o = (ctrl_busy || if_busy || (lsu_busy | vsu_busy | vex_busy)) ? IbexMuBiOn : IbexMuBiOff;
   end
 
   //////////////
@@ -760,7 +774,8 @@ module ibex_core import ibex_pkg::*; #(
 
     .is_vsetvli_o(is_vsetvli),
     .v_rs1_en_o(v_rs1_en),
-    .vex_req_o(vex_req)
+    .vex_req_o(vex_req),
+    .vex_resp_valid_i(vex_resp_valid) // execute unit stalls 
   );
 
   always_comb begin
@@ -850,12 +865,13 @@ module ibex_core import ibex_pkg::*; #(
   // Generate vector store request when LSU would normally be used for vector instructions
   // assign vsu_st_req = vector_store_req && lsu_req; // todo: No, we can't use the same signal
   
-  // Set vector register to read (vs3 field = instr[24:20])
-  assign vrf_rd_vreg_a = instr_rdata_id[11:7]; // for vector register instruction unlike the the scalar store
-  assign vrf_rd_en_a = 1'b1; // Always enable for now to ensure data is available
+  // TODO: Add proper decoding for vector ALU operations and element width
+  assign vex_alu_op = VADD;  // Placeholder - needs proper decoder integration
+  assign vex_element_width = EW32; // Placeholder - needs proper decoder integration
 
   // Vector load instructions write to vd field (rd = instr[11:7])
-  assign vldstu_vrf_waddr = instr_rdata_id[11:7]; // vd field for vector loads
+  assign vrf_waddr = instr_rdata_id[11:7]; // vd field for vector loads and vector execute
+  assign vrf_waddr_vs2 = instr_rdata_id[24:20]; // vs2 field for vector ALU
   assign lsu_addr_incr_req_shared = lsu_addr_incr_req || vsu_addr_incr_req; //todo: es ist for now ok because vector store unit and scalar lsu will not work together 
 
   always_comb begin
@@ -925,26 +941,54 @@ module ibex_core import ibex_pkg::*; #(
   // Vector Register File      //
   ///////////////////////////////
 
+  // VRF read port multiplexing between load/store unit and execute unit
+  logic [4:0]   vrf_rd_vreg_a_muxed;
+
+  always_comb begin
+    if (lsu_mux) begin
+      // Load/store unit uses VRF (vector store operations use port A only)
+      vrf_rd_vreg_a_muxed = instr_rdata_id[11:7]; // vs3 field for vector stores
+    end else begin
+      // Vector execute unit uses both ports A and B
+      vrf_rd_vreg_a_muxed = instr_rdata_id[19:15]; // vs1 field for vector ALU
+    end
+  end
+
+  // VRF write arbitration between load/store unit and execute unit
+  logic         vrf_we_final;
+  logic [127:0] vrf_wdata_final;
+  
+  // Priority: Load/Store unit has priority over execute unit
+  always_comb begin
+    if (vldstu_vrf_we) begin // todo: change, if they work simultnaiously, see how vucuna did it
+      vrf_we_final = vldstu_vrf_we;
+      vrf_wdata_final = vldstu_vrf_wdata;
+    end else begin
+      vrf_we_final = vex_vrf_we;
+      vrf_wdata_final = vex_vrf_wdata;
+    end
+  end
+
   ibex_vrf #(
     .NREGS(32)
   ) vector_register_file_i (
     .clk_i(clk_i),
     .rst_ni(rst_ni),
     
-    // Write interface - now connected to vector load/store unit
-    .wr_en_i(vldstu_vrf_we),
-    .wr_vreg_i(vldstu_vrf_waddr),
-    .wr_wdata_i(vldstu_vrf_wdata),
+    // Write interface - arbitrated between load/store and execute units
+    .wr_en_i(vrf_we_final),
+    .wr_vreg_i(vrf_waddr),
+    .wr_wdata_i(vrf_wdata_final),
     .wr_wstrb_i(16'hFFFF),  // Write all bytes for now (full vector register)
     
-    // Read port A for vector store unit
-    .rd_en_a_i(vrf_rd_en_a),
-    .rd_vreg_a_i(vrf_rd_vreg_a),
+    // Read port A - multiplexed between load/store and execute units
+    .rd_en_a_i(1'b1),
+    .rd_vreg_a_i(vrf_rd_vreg_a_muxed),
     .rd_rdata_a_o(vrf_rd_rdata_a),
     
-    // Read port B (unused for now)
-    .rd_en_b_i(1'b0),
-    .rd_vreg_b_i(5'b0),
+    // Read port B
+    .rd_en_b_i(1'b1),
+    .rd_vreg_b_i(vrf_waddr_vs2),
     .rd_rdata_b_o(vrf_rd_rdata_b)
   );
 
@@ -992,6 +1036,39 @@ module ibex_core import ibex_pkg::*; #(
     .data_rdata_i(data_rdata_i),     // For loads - now connected
     
     .busy_o(vsu_busy)
+  );
+
+  ///////////////////////////////
+  // Vector Execute Unit       //
+  ///////////////////////////////
+
+  vector_ex_unit #(
+    .VLEN(VLEN)
+  ) vector_ex_unit_i (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    
+    // Vector operation request interface  
+    .ex_req_i(vex_req),             // Vector ALU operation request from decoder
+    .op_i(vex_alu_op),              // ALU operation type // // todo: for now simply drive from a decoder
+    .vew_i(vex_element_width),      // Element width // todo: for now simply drive from a simple register 
+    .v_vl_i(v_vl),                  // Vector length
+    
+    .v_done_o(vex_done), // not used, it the same as vex_resp_valid
+    .v_err_o(vex_err), // not used, an error is not implemnted yet
+    
+    // Vector register file interface - using existing ports A and B
+    .vrf_rdata1_i(vrf_rd_rdata_a),  // First operand from VRF port A
+    .vrf_rdata2_i(vrf_rd_rdata_b),  // Second operand from VRF port B
+    
+    // Vector register file interface - write
+    .vrf_we_o(vex_vrf_we),          // VRF write enable
+    .vrf_wdata_o(vex_vrf_wdata),    // VRF write data
+    
+    .resp_valid_o(vex_resp_valid),  // Response valid signal
+    
+    // Status signals
+    .busy_o(vex_busy)
   );
 
   //////////////////////////////
