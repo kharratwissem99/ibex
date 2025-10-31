@@ -101,7 +101,7 @@ module ibex_decoder #(
 
   // Vector Execute Unit
   output logic                 ex_req_vs_o,
-  output logic [5:0]           vex_alu_op_o,
+  output ibex_pkg::v_alu_op_e  vex_alu_op_o,
 
   // jump/branches
   output logic                 jump_in_dec_o,         // jump is being calculated in ALU
@@ -828,7 +828,7 @@ module ibex_decoder #(
     mult_sel_o         = 1'b0;
     div_sel_o          = 1'b0;
 
-    vex_alu_op_o = '0;
+    vex_alu_op_o = VADD;
 
     unique case (opcode_alu)
 
@@ -950,7 +950,7 @@ module ibex_decoder #(
 
         alu_operator_o     = ALU_GEU;
 
-        case (instr_rdata_id[31:26]) // funct6
+        case (instr_alu[31:26]) // funct6
           6'b000000: vex_alu_op_o = VADD;
           6'b000010: vex_alu_op_o = VSUB;
           6'b000011: vex_alu_op_o = VRSUB;
