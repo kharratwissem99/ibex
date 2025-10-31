@@ -694,9 +694,9 @@ module ibex_decoder #(
       OPCODE_VSETVLI: begin //todo: change the opcode name in the enum 
         // Vector Store instructions (vse8.v, vse16.v, vse32.v)
         // Unit-stride vector stores have mop[2:0] = 000, so bits[28:26] = 000
-        if ((instr[31] == 1'b0) && (instr[31:26] == 6'b0) && (instr[22:20] == 3'b0))begin // last bit is fixed and should be 0, see specification RVV 1.0 only sew is supported
         // todo: should we throw an exception if sew=64 . The extension doesn't support it, but vsetvli can still handle it normally.
-          if (instr[14:12] == 3'b111) begin // have also a fixed value and should be 111
+        if (instr[14:12] == 3'b111) begin // have also a fixed value and should be 111
+          if ((instr[31] == 1'b0) && (instr[31:26] == 6'b0) && (instr[22:20] == 3'b0)) begin // last bit is fixed and should be 0, see specification RVV 1.0 only sew is supported
             rf_ren_a_o         = 1'b1;  // Base address from rs1 //for rvfi and memecc todo: do we need these?
             // data_req_vs_o      = 1'b1;  // Request vector memory access
             // data_we_o          = 1'b1;  // Write enable
@@ -715,14 +715,13 @@ module ibex_decoder #(
             // csr signals
             csr_access_o = v_rd_en | v_rs1_en;         // access to CSR
             csr_op = CSR_OP_WRITE;
-          end              // operation to perform on CSR
-          else if (instr[14:12] == 3'b000) begin // OPIVV Vector-vector
-            ex_req_vs_o      = 1'b1;  // Request the Vector Execute Unit
-          end else begin
-            illegal_insn = 1'b1; // Unsupported vector store width
           end
+          else illegal_insn = 1'b1; // Unsupported vector store width
+        end              // operation to perform on CSR
+        else if (instr[14:12] == 3'b000) begin // OPIVV Vector-vector
+          ex_req_vs_o      = 1'b1;  // Request the Vector Execute Unit
         end else begin
-          illegal_insn = 1'b1; // Unsupported vector store format
+          illegal_insn = 1'b1; // Unsupported vector store width
         end
       end
 
