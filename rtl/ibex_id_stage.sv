@@ -120,6 +120,7 @@ module ibex_id_stage #(
   output logic [31:0]               lsu_wdata_o,
 
   output logic                      vex_req_o, // to the vector EX
+  output logic [5:0]                vex_alu_op_o,
   input  logic                      vex_resp_valid_i,
 
   input  logic                      lsu_req_done_i, // Data req to LSU is complete and
@@ -534,6 +535,7 @@ module ibex_id_stage #(
     .data_sign_extension_o(lsu_sign_ext),
     
     .ex_req_vs_o        (ex_req_vs_dec),
+    .vex_alu_op_o       (vex_alu_op_o),
 
     // jump/branches
     .jump_in_dec_o  (jump_in_dec),

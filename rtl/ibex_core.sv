@@ -657,6 +657,7 @@ module ibex_core import ibex_pkg::*; #(
 
     // Stalls
     .ex_valid_i      (ex_valid),
+    .vex_alu_op_o    (vex_alu_op),
     .lsu_resp_valid_i(lsu_resp_valid_shared),
     .lsu_mux_o(lsu_mux),
 
@@ -866,7 +867,7 @@ module ibex_core import ibex_pkg::*; #(
   // assign vsu_st_req = vector_store_req && lsu_req; // todo: No, we can't use the same signal
   
   // TODO: Add proper decoding for vector ALU operations and element width
-  assign vex_alu_op = VADD;  // Placeholder - needs proper decoder integration
+  // assign vex_alu_op = VADD;  // Placeholder - needs proper decoder integration
   assign vex_element_width = EW32; // Placeholder - needs proper decoder integration
 
   // Vector load instructions write to vd field (rd = instr[11:7])
