@@ -731,7 +731,7 @@ module ibex_decoder #(
       OPCODE_VECTOR: begin
         // Vector Store instructions (vse8.v, vse16.v, vse32.v)
         // Unit-stride vector stores have mop[2:0] = 000, so bits[28:26] = 000
-        if (instr[31:20] == 12'b0) begin // Unit-stride stores (mop=000, nf=0)
+        if ((instr[24:20] == 5'b0) || (instr[31:26] == 6'b0)) begin // Unit-stride stores (mop=000, nf=0)
           if (instr[14:12] == 3'b000) begin // vse8.v
             rf_ren_a_o         = 1'b1;  // Base address from rs1
             data_req_vs_o      = 1'b1;  // Request vector memory access
@@ -764,7 +764,7 @@ module ibex_decoder #(
       OPCODE_VECTOR_LOAD: begin
         // Vector Load instructions (vle8.v, vle16.v, vle32.v)
         // Unit-stride vector loads have mop[2:0] = 000, so bits[28:26] = 000
-        if (instr[31:20] == 12'b0) begin // Unit-stride loads (mop=000, nf=0)
+        if ((instr[24:20] == 5'b0) || (instr[31:26] == 6'b0)) begin // Unit-stride loads (mop=000, nf=0). todo: vm = 1 always??
           if (instr[14:12] == 3'b000) begin // vle8.v
             rf_ren_a_o         = 1'b1;  // Base address from rs1
             data_req_vs_o      = 1'b1;  // Request vector memory access
@@ -960,7 +960,7 @@ module ibex_decoder #(
       // Vector Store   //
       ////////////////////
       OPCODE_VSETVLI: begin // change the name of the opcode
-        if (instr[31] == 1'b1) begin //vsetvli
+        if (instr[31] == 1'b0) begin //vsetvli
           alu_op_a_mux_sel_o = OP_A_REG_A; // this should contain the AVL
         end
         else if ((instr[31:30] == 2'b11)) begin //vsetivli

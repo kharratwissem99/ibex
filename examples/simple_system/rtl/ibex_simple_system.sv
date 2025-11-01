@@ -19,7 +19,7 @@
 `endif
 
 `ifndef SRAMInitFile
-  `define SRAMInitFile "/home/kharrat/Desktop/repos/ibex/examples/sw/simple_system/vsetvli_test/vsetvli_test.vmem"
+  `define SRAMInitFile "/home/kharrat/Desktop/repos/ibex/examples/sw/simple_system/test_c_vector/test_c_vector.vmem"
 `endif
 /**
  * Ibex simple system
