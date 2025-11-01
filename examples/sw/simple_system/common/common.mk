@@ -8,7 +8,8 @@ COMMON_SRCS = $(wildcard $(COMMON_DIR)/*.c)
 INCS := -I$(COMMON_DIR)
 
 # ARCH = rv32im # to disable compressed instructions
-ARCH ?= rv32imc
+ARCH ?= rv32imcv
+# ARCH ?= rv32gcv # to use the vector extension
 
 ifdef PROGRAM
 PROGRAM_C := $(PROGRAM).c
@@ -19,7 +20,8 @@ SRCS = $(COMMON_SRCS) $(PROGRAM_C) $(EXTRA_SRCS)
 C_SRCS = $(filter %.c, $(SRCS))
 ASM_SRCS = $(filter %.S, $(SRCS))
 
-CC = ~/Downloads/lowrisc-toolchain-gcc-rv32imcb-x86_64-20250710-1/bin/riscv32-unknown-elf-gcc
+# CC = ~/Downloads/lowrisc-toolchain-gcc-rv32imcb-x86_64-20250710-1/bin/riscv32-unknown-elf-gcc
+CC = riscv64-elf-gcc # supported and can be used
 
 CROSS_COMPILE = $(patsubst %-gcc,%-,$(CC))
 OBJCOPY ?= $(CROSS_COMPILE)objcopy
@@ -34,7 +36,7 @@ OBJS := ${C_SRCS:.c=.o} ${ASM_SRCS:.S=.o} ${CRT:.S=.o}
 DEPS = $(OBJS:%.o=%.d)
 
 ifdef PROGRAM
-OUTFILES := $(PROGRAM).elf $(PROGRAM).vmem $(PROGRAM).bin
+OUTFILES := $(PROGRAM).elf $(PROGRAM).vmem $(PROGRAM).bin $(PROGRAM).dis
 else
 OUTFILES := $(OBJS)
 endif

@@ -1,0 +1,7 @@
+11_0011010000_00100_111_00000_1010111
+
+
+to Build the sw:
+make -C examples/sw/simple_system/test_c_vector
+to see .dis file:
+riscv64-elf-objdump -d examples/sw/simple_system/test_c_vector/test_c_vector.elf > examples/sw/simple_system/test_c_vector/test_c_vector.dis
