@@ -696,7 +696,7 @@ module ibex_decoder #(
         // Unit-stride vector stores have mop[2:0] = 000, so bits[28:26] = 000
         // todo: should we throw an exception if sew=64 . The extension doesn't support it, but vsetvli can still handle it normally.
         if (instr[14:12] == 3'b111) begin // have also a fixed value and should be 111
-          if ((instr[31] == 1'b0) && (instr[31:26] == 6'b0) && (instr[22:20] == 3'b0)) begin // last bit is fixed and should be 0, see specification RVV 1.0 only sew is supported
+          if (((instr[31] == 1'b0) || (instr[31:30] == 2'b11)) && (instr[22:20] == 3'b0)) begin // last bit is fixed and should be 0, see specification RVV 1.0 only sew is supported
             rf_ren_a_o         = 1'b1;  // Base address from rs1 //for rvfi and memecc todo: do we need these?
             // data_req_vs_o      = 1'b1;  // Request vector memory access
             // data_we_o          = 1'b1;  // Write enable
@@ -960,7 +960,13 @@ module ibex_decoder #(
       // Vector Store   //
       ////////////////////
       OPCODE_VSETVLI: begin // change the name of the opcode
-        alu_op_a_mux_sel_o = OP_A_REG_A; // this should contain the AVL
+        if (instr[31] == 1'b1) begin //vsetvli
+          alu_op_a_mux_sel_o = OP_A_REG_A; // this should contain the AVL
+        end
+        else if ((instr[31:30] == 2'b11)) begin //vsetivli
+          alu_op_a_mux_sel_o = OP_A_IMM; // this should contain the AVL
+          imm_a_mux_sel_o = IMM_A_Z;
+        end
         // alu_op_b_mux_sel_o = OP_B_REG_B; // TODO: should select vlmax not an immediate we can add a new immediate type
         // alu_op_b_mux_sel_o  = OP_B_IMM;
         // imm_b_mux_sel_o     = IMM_B_I;
