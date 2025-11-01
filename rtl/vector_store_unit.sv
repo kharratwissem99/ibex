@@ -96,6 +96,7 @@ module vector_store_unit (
   // For vector stores, we read sequential 32-bit words from the vector register
   assign vrf_word_select = gnt_cnt_q[1:0];
   
+  // todo: Das hier ist kein Schiebregister. Das ist ein MUX !!!!! Bitte ein Schiebregister verwenden, falls es Hardware günstig ist.
   always_comb begin
     case (vrf_word_select)
       2'b00: current_vrf_data = rd_rdata_i[31:0];    // Word 0 (LSB)
