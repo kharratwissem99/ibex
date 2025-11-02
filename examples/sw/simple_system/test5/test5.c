@@ -7,7 +7,6 @@
 
 int main(int argc, char **argv) {
   //EW16 AVL5
-  // be careful should be aligned access if you work with 32 bits elements
   size_t vl = __riscv_vsetvl_e16m1(5);
   int16_t a[8] = {1, 2, 3, 4, 5, 6, 7, 8};
   int16_t b[8] = {10, 20, 30, 40, 50, 60, 70, 80};
