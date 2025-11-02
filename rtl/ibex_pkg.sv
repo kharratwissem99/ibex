@@ -629,7 +629,8 @@ package ibex_pkg;
     CSR_SECURESEED     = 12'h7C1,
 
     CSR_VL             = 12'hC20,
-    CSR_VTYPE          = 12'hC21
+    CSR_VTYPE          = 12'hC21,
+    CSR_VLENB          = 12'hC22
   } csr_num_e;
 
   // CSR pmp-related offsets

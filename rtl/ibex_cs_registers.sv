@@ -27,6 +27,9 @@ module ibex_cs_registers #(
   parameter bit                     RV32E             = 0,
   parameter ibex_pkg::rv32m_e RV32M                   = ibex_pkg::RV32MFast,
   parameter ibex_pkg::rv32b_e RV32B                   = ibex_pkg::RV32BNone,
+  // Vector extension parameters
+  parameter int unsigned            VLEN              = 128,  // Vector register length in bits
+  localparam int    unsigned        VLENB             = VLEN/8,
   // mvendorid: encoding of manufacturer/provider
   parameter logic [31:0]            CsrMvendorId      = 32'b0,
   // mimpid: encoding of processor implementation version
@@ -557,6 +560,12 @@ module ibex_cs_registers #(
 
       CSR_VL: begin
         csr_rdata_int = vl_q;
+        illegal_csr   = 1'b0;
+      end
+
+      // vlenb: Vector register length in bytes (VLEN/8)
+      CSR_VLENB: begin
+        csr_rdata_int = 32'(VLENB);  // Parameterized based on VLEN
         illegal_csr   = 1'b0;
       end
 
