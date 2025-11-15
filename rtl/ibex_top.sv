@@ -41,6 +41,12 @@ module ibex_top import ibex_pkg::*; #(
   parameter int unsigned            DmAddrMask                   = 32'h00000FFF,
   parameter int unsigned            DmHaltAddr                   = 32'h1A110800,
   parameter int unsigned            DmExceptionAddr              = 32'h1A110808,
+
+  // added for v-extension support
+  // TODO: should be taken from the configuration file 
+  parameter bit                     V_Enabled                    = 1'b0, // TODO: should be set to 1'b1 for V-Extension, should be taken from the configuration
+  parameter int unsigned            VLEN                         = 128, // TODO: VLEN should be taken from the configuration file
+
   // Default seed and nonce for scrambling
   parameter logic [SCRAMBLE_KEY_W-1:0]   RndCnstIbexKey          = RndCnstIbexKeyDefault,
   parameter logic [SCRAMBLE_NONCE_W-1:0] RndCnstIbexNonce        = RndCnstIbexNonceDefault,
@@ -188,6 +194,13 @@ module ibex_top import ibex_pkg::*; #(
   logic [RegFileDataWidth-1:0] rf_rdata_a_ecc, rf_rdata_a_ecc_buf;
   logic [RegFileDataWidth-1:0] rf_rdata_b_ecc, rf_rdata_b_ecc_buf;
 
+  // Vector register file signals (exist regardless of V_Enabled; tied off when disabled)
+  logic [VLEN-1:0] rf_wdata_wb_v;
+  logic [VLEN-1:0] rf_rdata_a_v;
+  logic [VLEN-1:0] rf_rdata_b_v;
+  logic            rf_we_wb_v;
+  logic            rf_v_alert_major_internal;
+
   // Combined data and integrity for data and instruction busses
   logic [MemDataWidth-1:0]     data_wdata_core;
   logic [MemDataWidth-1:0]     data_rdata_core;
@@ -329,7 +342,9 @@ module ibex_top import ibex_pkg::*; #(
     .DmHaltAddr       (DmHaltAddr),
     .DmExceptionAddr  (DmExceptionAddr),
     .CsrMvendorId     (CsrMvendorId),
-    .CsrMimpId        (CsrMimpId)
+    .CsrMimpId        (CsrMimpId),
+    .V_Enabled       (V_Enabled),
+    .VLEN            (VLEN)
   ) u_ibex_core (
     .clk_i(clk),
     .rst_ni,
@@ -363,6 +378,12 @@ module ibex_top import ibex_pkg::*; #(
     .rf_wdata_wb_ecc_o(rf_wdata_wb_ecc),
     .rf_rdata_a_ecc_i (rf_rdata_a_ecc_buf),
     .rf_rdata_b_ecc_i (rf_rdata_b_ecc_buf),
+
+    // Added for V-extension support
+    .rf_wdata_wb_v_o  (rf_wdata_wb_v),
+    .rf_we_wb_v_o     (rf_we_wb_v),
+    .rf_rdata_a_v_i   (rf_rdata_a_v),
+    .rf_rdata_b_v_i   (rf_rdata_b_v),
 
     .ic_tag_req_o      (ic_tag_req),
     .ic_tag_write_o    (ic_tag_write),
@@ -516,6 +537,39 @@ module ibex_top import ibex_pkg::*; #(
       .we_a_i   (rf_we_wb),
       .err_o    (rf_alert_major_internal)
     );
+  end
+
+  // TODO: Instantiation of the register file in the top module, and maybe add a configuration to enable the Instantiation with if else.
+  if (V_Enabled) begin : gen_regfile_v_ff
+    // Vector RF instance (no ECC on VLEN path for now)
+    ibex_v_register_file_ff #(
+      .RV32E        (1'b0),
+      .DataWidth    (VLEN),
+      .WrenCheck    (1'b0),
+      .RdataMuxCheck(1'b0),
+      .WordZeroVal  ('0)
+    ) v_register_file_i (
+      .clk_i           (clk),
+      .rst_ni          (rst_ni),
+      .test_en_i       (test_en_i),
+      .dummy_instr_id_i(dummy_instr_id),
+      .dummy_instr_wb_i(dummy_instr_wb),
+      .raddr_a_i       (rf_raddr_a),
+      .rdata_a_o       (rf_rdata_a_v),
+      .raddr_b_i       (rf_raddr_b),
+      .rdata_b_o       (rf_rdata_b_v),
+      .waddr_a_i       (rf_waddr_wb),
+      .wdata_a_i       (rf_wdata_wb_v),
+      .we_a_i          (rf_we_wb_v),
+      .err_o           (rf_v_alert_major_internal)
+    );
+  end else begin : gen_no_vector_rf
+    // Tie-off vector signals when V-extension disabled
+    assign rf_rdata_a_v = '0;
+    assign rf_rdata_b_v = '0;
+    assign rf_wdata_wb_v = '0;
+    assign rf_we_wb_v    = 1'b0;
+    assign rf_v_alert_major_internal = 1'b0;
   end
 
   ///////////////////////////////
@@ -1135,6 +1189,7 @@ module ibex_top import ibex_pkg::*; #(
   assign alert_major_internal_o = core_alert_major_internal |
                                   lockstep_alert_major_internal |
                                   rf_alert_major_internal |
+                                  rf_v_alert_major_internal |
                                   icache_alert_major_internal;
   assign alert_major_bus_o      = core_alert_major_bus | lockstep_alert_major_bus;
   assign alert_minor_o          = core_alert_minor | lockstep_alert_minor;

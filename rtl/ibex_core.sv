@@ -51,7 +51,11 @@ module ibex_core import ibex_pkg::*; #(
   // mvendorid: encoding of manufacturer/provider
   parameter logic [31:0]            CsrMvendorId     = 32'b0,
   // marchid: encoding of base microarchitecture
-  parameter logic [31:0]            CsrMimpId        = 32'b0
+  parameter logic [31:0]            CsrMimpId        = 32'b0,
+
+  // Added for V-extension support
+  parameter bit                     V_Enabled                    = 1'b0, // TODO: should be set to 1'b1 for V-Extension, should be taken from the configuration
+  parameter int unsigned            VLEN                         = 128 // TODO: VLEN should be taken from the configuration file
 ) (
   // Clock and Reset
   input  logic                         clk_i,
@@ -84,11 +88,18 @@ module ibex_core import ibex_pkg::*; #(
   output logic                         dummy_instr_wb_o,
   output logic [4:0]                   rf_raddr_a_o,
   output logic [4:0]                   rf_raddr_b_o,
+  input  logic [RegFileDataWidth-1:0]  rf_rdata_a_ecc_i,
+  input  logic [RegFileDataWidth-1:0]  rf_rdata_b_ecc_i,
+
   output logic [4:0]                   rf_waddr_wb_o,
   output logic                         rf_we_wb_o,
   output logic [RegFileDataWidth-1:0]  rf_wdata_wb_ecc_o,
-  input  logic [RegFileDataWidth-1:0]  rf_rdata_a_ecc_i,
-  input  logic [RegFileDataWidth-1:0]  rf_rdata_b_ecc_i,
+
+  // Added for V-extension support
+  output logic [VLEN-1:0]  rf_wdata_wb_v_o,
+  output logic             rf_we_wb_v_o,
+  input  logic [VLEN-1:0]  rf_rdata_a_v_i,
+  input  logic [VLEN-1:0]  rf_rdata_b_v_i,
 
   // RAMs interface
   output logic [IC_NUM_WAYS-1:0]       ic_tag_req_o,
@@ -260,6 +271,12 @@ module ibex_core import ibex_pkg::*; #(
   logic        rf_we_id;
   logic        rf_rd_a_wb_match;
   logic        rf_rd_b_wb_match;
+
+  // Added for V-extension support: Internal signals
+  logic [VLEN-1:0] rf_wdata_wb_v;
+  logic            rf_we_wb_v;
+  logic [VLEN-1:0] rf_rdata_a_v;
+  logic [VLEN-1:0] rf_rdata_b_v;
 
   // ALU Control
   alu_op_e     alu_operator_ex;
@@ -685,6 +702,10 @@ module ibex_core import ibex_pkg::*; #(
     .rf_rd_a_wb_match_o(rf_rd_a_wb_match),
     .rf_rd_b_wb_match_o(rf_rd_b_wb_match),
 
+    // Added for V-extension support
+    .rf_rdata_a_v_i(rf_rdata_a_v),
+    .rf_rdata_b_v_i(rf_rdata_b_v),
+
     .rf_waddr_wb_i    (rf_waddr_wb),
     .rf_wdata_fwd_wb_i(rf_wdata_fwd_wb),
     .rf_write_wb_i    (rf_write_wb),
@@ -782,10 +803,10 @@ module ibex_core import ibex_pkg::*; #(
     .data_rdata_i     (data_rdata_i),
 
     // signals to/from ID/EX stage
-    .lsu_we_i      (lsu_we),
-    .lsu_type_i    (lsu_type),
-    .lsu_wdata_i   (lsu_wdata),
-    .lsu_sign_ext_i(lsu_sign_ext),
+    .lsu_we_i      (lsu_we), // from ID stage
+    .lsu_type_i    (lsu_type), // from ID stage
+    .lsu_wdata_i   (lsu_wdata), // from ID stage
+    .lsu_sign_ext_i(lsu_sign_ext), // from ID stage
 
     .lsu_rdata_o      (rf_wdata_lsu),
     .lsu_rdata_valid_o(lsu_rdata_valid),
@@ -815,7 +836,8 @@ module ibex_core import ibex_pkg::*; #(
   ibex_wb_stage #(
     .ResetAll         (ResetAll),
     .WritebackStage   (WritebackStage),
-    .DummyInstructions(DummyInstructions)
+    .DummyInstructions(DummyInstructions),
+    .VLEN             (VLEN)
   ) wb_stage_i (
     .clk_i                   (clk_i),
     .rst_ni                  (rst_ni),
@@ -838,17 +860,23 @@ module ibex_core import ibex_pkg::*; #(
     .rf_waddr_id_i(rf_waddr_id),
     .rf_wdata_id_i(rf_wdata_id),
     .rf_we_id_i   (rf_we_id),
+    .rf_wdata_id_i_v('0), // TODO: connect to V-extension
 
     .dummy_instr_id_i(dummy_instr_id),
 
     .rf_wdata_lsu_i(rf_wdata_lsu),
     .rf_we_lsu_i   (rf_we_lsu),
+    .rf_wdata_lsu_i_v('0), // TODO: connect to V-extension
 
     .rf_wdata_fwd_wb_o(rf_wdata_fwd_wb),
 
     .rf_waddr_wb_o(rf_waddr_wb),
     .rf_wdata_wb_o(rf_wdata_wb),
     .rf_we_wb_o   (rf_we_wb),
+
+    // added to support v-extension
+    .rf_wdata_wb_v_o(rf_wdata_wb_v),
+    .rf_we_wb_v_o   (rf_we_wb_v),
 
     .dummy_instr_wb_o(dummy_instr_wb),
 
@@ -890,6 +918,18 @@ module ibex_core import ibex_pkg::*; #(
   assign rf_waddr_wb_o    = rf_waddr_wb;
   assign rf_we_wb_o       = rf_we_wb;
   assign rf_raddr_b_o     = rf_raddr_b;
+
+  // added to support v-extension
+  assign rf_rdata_a_v = rf_rdata_a_v_i;
+  assign rf_rdata_b_v = rf_rdata_b_v_i;
+  if (V_Enabled) begin : gen_v_ext
+    assign rf_wdata_wb_v_o = rf_wdata_wb_v;
+    assign rf_we_wb_v_o    = rf_we_wb_v;
+  end
+  else begin : gen_no_v_ext
+    assign rf_wdata_wb_v_o = '0;
+    assign rf_we_wb_v_o    = 1'b0;
+  end
 
   if (RegFileECC) begin : gen_regfile_ecc
 
